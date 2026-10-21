@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>💐 Bouquet</title>
+<link rel="stylesheet" href="styles/app.css">
+</head>
+<body>
+
+<div class="app" id="app">
+  <aside class="sidebar" id="sidebar" aria-label="Навигация">
+    <div class="sidebar-heading">
+      <span class="brand" title="💐 Bouquet, @vladaaar, 2026">💐 <span class="sidebar-label">Bouquet</span></span>
+      <button id="sidebarToggle" aria-label="Свернуть сайдбар" aria-expanded="true" aria-controls="sidebar">‹</button>
+    </div>
+    <nav id="sidebarTabs" aria-label="Разделы приложения"></nav>
+    <footer class="sign sidebar-label"><a href="https://unit.link/vladaaar">@vladaaar, 2026</a></footer>
+  </aside>
+  <main class="workspace" id="workspace">
+  <section class="explorer panel" id="explorerPanel" aria-label="Исследование файлов">
+  <div class="empty-state" id="emptyState">
+    <button class="upload-button" id="uploadFile"><span aria-hidden="true">↑</span>Открыть файл</button>
+    <p>Выберите локальный файл или перетащите его сюда</p>
+    <small>SQLite, CSV, TSV и текст · Данные остаются в браузере</small>
+  </div>
+  <div class="file-content" id="fileContent" hidden>
+  <div class="bar">
+    <div class="chip" id="chip" data-state="stop">
+      <span class="dot"></span>
+      <button class="slot empty" id="slotFile" title="Выбрать файл с данными">файл не выбран</button>
+      <span class="sep" id="tableSep" hidden></span>
+      <select class="slot table-select" id="tableSelect" aria-label="Таблица базы данных" hidden></select>
+      <span class="sep"></span>
+      <button class="slot empty" id="slotInterp" title="Подключить плагин-интерпретатор (.js)">интерпретатор</button>
+    </div>
+    <form class="search" id="searchForm" hidden>
+      <span class="mark" title="💐 Bouquet, @vladaaar, 2026">💐</span>
+      <input id="q" type="search" aria-label="Искать в файле" autocomplete="off" spellcheck="false" placeholder="Искать в файле">
+      <button class="clear" id="clear" type="button" hidden aria-label="Очистить поиск">×</button>
+    </form>
+  </div>
+
+  <div class="status" id="status" role="status" aria-live="polite"></div>
+  <div class="stage" id="stage"></div>
+
+  <nav class="pager" id="pager" hidden>
+    <button id="prev" aria-label="Назад">‹</button>
+    <span class="pos" id="pos"></span>
+    <button id="next" aria-label="Вперёд">›</button>
+  </nav>
+
+  </div>
+  </section>
+  <section class="panel content-panel" id="pluginsPanel" aria-label="Плагины" hidden>
+    <h1>Плагины</h1>
+    <p>Форматы, поиск, интерфейс и темы оформления подключаются плагинами.</p>
+    <button class="action-button" id="addPlugin">Подключить плагин .js</button>
+    <p id="pluginStatus" role="status" aria-live="polite"></p>
+    <div class="plugin-list" id="pluginList"></div>
+  </section>
+  <section class="panel content-panel" id="settingsPanel" aria-label="Настройки" hidden>
+    <h1>Настройки</h1>
+    <div class="settings-card">
+      <h2>Чтение файлов</h2>
+      <label><input id="progressive" type="checkbox" disabled> Прогрессивная загрузка</label>
+      <p id="loadingHint">Выберите SQLite-файл</p>
+    </div>
+    <div class="settings-card">
+      <h2>Оформление</h2>
+      <label for="themeSelect">Тема — плагин оформления</label>
+      <select id="themeSelect" aria-label="Тема оформления"></select>
+    </div>
+  </section>
+  </main>
+</div>
+
+<div class="drop">Отпустите файл — он откроется, .js подключится как плагин</div>
+<input type="file" id="pickFile" hidden>
+<input type="file" id="pickModule" accept=".js,text/javascript" hidden>
+
+<script src="core/bouquet.js"></script>
+<script src="core/sources.js"></script>
+
+<!-- Модули. Файла нет — строка просто игнорируется, ядро останется рабочим. -->
+<script src="modules/table.js"></script>
+<script src="modules/csv.js"></script>
+<script src="modules/sqlite.js"></script>
+<script src="modules/sqlite_full_load.js"></script>
+<script src="modules/search.js"></script>
+<script src="modules/links.js"></script>
+
+<script src="modules/themes.js"></script>
+<script src="core/ui.js"></script>
+<script src="core/app.js"></script>
+</body>
+</html>
