@@ -2,6 +2,8 @@
 
 **Drop in a file. Explore what’s inside.**
 
+![SQLite search](sqlite_search.png)
+
 A lightweight browser viewer for SQLite, CSV, TSV, and plain text. Works offline, with no installation or build step. Your local files stay in your browser.
 
 - **See data immediately.** Open a file and browse the first 100 rows.
