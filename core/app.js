@@ -2,17 +2,17 @@
 (function () {
   const B = window.Bouquet, U = B.util;
   const $ = id => document.getElementById(id);
-  const chip = $('chip'), slotFile = $('slotFile'), slotInterp = $('slotInterp');
+  const fileState = $('fileState');
   const form = $('searchForm'), q = $('q'), clear = $('clear');
-  const tableSelect = $('tableSelect'), stage = $('stage'), pager = $('pager'), pos = $('pos'), status = $('status');
+  const stage = $('stage'), pager = $('pager'), pos = $('pos'), status = $('status'), summary = $('dataSummary');
   const S = {
     fileName: null, source: null, bytes: null, interp: null, dataset: null,
     active: 0, query: '', page: 0, pageSize: 100, opening: false, reading: false,
-    cursors: [null], total: undefined
+    cursors: [null], total: undefined, collection: null, location: 'data'
   };
   const progressive = $('progressive');
   const MEMORY_LIMIT = 100 * 1024 * 1024;
-  let opening, reading, debounce;
+  let opening, reading, debounce, selectionVersion = 0;
   const search = () => B.features.search;
   function resetPages() { S.page = 0; S.cursors = [null]; S.total = undefined; S.matches = undefined; }
   const choose = (list, value) => list.filter(m => {
@@ -26,11 +26,11 @@
     B.ui.currentView = null; B.emit('view:reset');
     S.dataset?.close?.();
     Object.assign(S, { fileName: name, source: null, dataset: null, interp: null, bytes: null,
-      opening: true, reading: false, query: preserve ? S.query : '', active: 0, error: '', loadingMode: mode || null });
+      opening: true, reading: false, query: preserve ? S.query : '', active: 0, error: '', loadingMode: mode || null, location: 'data' });
     resetPages(); if (!preserve) q.value = ''; clear.hidden = !q.value;
-    stage.replaceChildren(); tableSelect.replaceChildren(); tableSelect.hidden = true; $('tableSep').hidden = true; pager.hidden = true;
+    stage.replaceChildren(); summary.textContent = ''; pager.hidden = true;
     $('emptyState').hidden = true; $('fileContent').hidden = false;
-    status.textContent = 'Открытие файла…'; paintChip();
+    status.textContent = 'Открытие файла…'; paintFileState(); paintNavigation();
     try {
       const source = await load(request.signal);
       U.checkAbort(request.signal);
@@ -45,7 +45,7 @@
         interpreter = choose(B.interpreters.filter(m => m.format === interpreter.format && m.loadingMode === preferredMode), meta) || interpreter;
       }
       S.interp = interpreter; S.loadingMode = interpreter.loadingMode;
-      paintChip();
+      paintFileState();
       let result;
       if (interpreter.open) result = await interpreter.open(meta);
       else {
@@ -60,7 +60,8 @@
       if (request.signal.aborted) { result?.close?.(); return; }
       S.dataset = U.normalize(result, name);
       if (!S.dataset.tables.length) S.dataset.tables = [U.textTable('В файле нет таблиц для показа', 'пусто')];
-      if (tableName) S.active = Math.max(0, S.dataset.tables.findIndex(t => t.name === tableName));
+      S.active = tableName ? S.dataset.tables.findIndex(t => t.name === tableName) : S.dataset.tables.length === 1 ? 0 : -1;
+      S.location = S.active < 0 ? 'tables' : 'data';
       status.textContent = source.note || '';
     } catch (err) {
       if (request.signal.aborted) return;
@@ -75,9 +76,112 @@
     }
   }
   function openFile(file) {
+    selectionVersion++;
     if (U.ext(file.name) === 'js') return loadModuleFile(file);
+    S.collection = null;
     B.ui.selectTab('explorer');
     return openSource(() => U.blobSource(file), file.name);
+  }
+  function cancelContent() {
+    opening?.abort(); reading?.abort(); opening = reading = null; clearTimeout(debounce);
+    S.opening = S.reading = false;
+    B.ui.currentView = null; B.emit('view:reset');
+    stage.removeAttribute('aria-busy'); pager.hidden = true;
+  }
+  function showCollection(name, entries, error = '', autoOpen = true) {
+    cancelContent(); S.dataset?.close?.();
+    Object.assign(S, { collection: { name, entries }, fileName: null, source: null,
+      dataset: null, interp: null, bytes: null, active: -1, query: '', error, loadingMode: null, location: 'files' });
+    q.value = ''; clear.hidden = true; resetPages();
+    B.ui.selectTab('explorer');
+    if (autoOpen && entries.length === 1 && !error) return openEntry(entries[0]);
+    paint();
+  }
+  function openEntry(entry) {
+    selectionVersion++;
+    return openSource(entry.load || (() => U.blobSource(entry.file)), entry.name);
+  }
+  function openFiles(files, { folder = false } = {}) {
+    if (!files.length && !folder) return;
+    selectionVersion++;
+    if (!folder && files.length === 1) return openFile(files[0]);
+    const entries = U.fileEntries(files);
+    const name = folder ? files[0]?.webkitRelativePath?.split('/')[0] || 'Папка' : 'Выбранные файлы';
+    return showCollection(name, entries);
+  }
+  function selectTable(active) {
+    if (!S.dataset?.tables[active]) return;
+    S.active = active; S.location = 'data'; resetPages(); paint();
+  }
+  function navigateTo(level) {
+    selectionVersion++; cancelContent();
+    if (level === 'tables' && S.dataset) {
+      S.location = 'tables'; S.active = -1; paint();
+    } else if (level === 'files' && S.collection) {
+      showCollection(S.collection.name, S.collection.entries, '', false);
+    }
+  }
+  function paintHeader() {
+    const explorer = B.ui.activeTab === 'explorer';
+    const hasContent = !!(S.fileName || S.collection);
+    $('openFile').hidden = !explorer || !hasContent;
+    $('settingsButton').hidden = !explorer;
+    $('closeSettings').hidden = explorer;
+    const crumbs = [];
+    if (!explorer) {
+      crumbs.push({ label: B.ui.activeLabel });
+    } else {
+      if (S.collection) crumbs.push({ label: S.collection.name, level: S.location !== 'files' ? 'files' : null });
+      if (S.fileName) {
+        const prefix = S.collection?.name + '/';
+        const name = S.fileName.startsWith(prefix) ? S.fileName.slice(prefix.length) : S.fileName;
+        crumbs.push({ label: name, level: S.location === 'data' && S.dataset?.tables.length > 1 ? 'tables' : null });
+      }
+      if (S.location === 'data' && S.dataset?.tables.length > 1) {
+        crumbs.push({ label: S.dataset.tables[S.active]?.name || '' });
+      }
+    }
+    $('breadcrumbs').hidden = !crumbs.length;
+    $('breadcrumbs').classList.toggle('section-path', !explorer);
+    $('breadcrumbList').replaceChildren();
+    crumbs.forEach(({ label, level }, index) => {
+      const item = document.createElement('li');
+      const current = index === crumbs.length - 1;
+      const node = document.createElement(!current && level ? 'button' : 'span');
+      node.textContent = label; node.title = label;
+      if (current) node.setAttribute('aria-current', 'page');
+      if (!current && level) {
+        node.dataset.level = level;
+        node.onclick = () => navigateTo(level);
+      }
+      item.appendChild(node); $('breadcrumbList').appendChild(item);
+    });
+  }
+  function paintNavigation() {
+    paintHeader();
+    const table = S.dataset?.tables[S.active];
+    form.hidden = !search() || S.location !== 'data' || !table;
+  }
+  function paintList() {
+    B.ui.currentView = null; stage.replaceChildren(); summary.textContent = ''; pager.hidden = true;
+    const files = S.location === 'files';
+    const entries = files ? S.collection.entries : S.dataset.tables;
+    const list = document.createElement('div'); list.className = 'entity-browser';
+    const title = document.createElement('h1'); title.textContent = files ? 'Выберите файл' : 'Выберите таблицу';
+    list.appendChild(title);
+    if (!entries.length) {
+      const note = document.createElement('p'); note.textContent = S.error || 'В папке нет файлов'; list.appendChild(note);
+    }
+    const items = document.createElement('ul'); items.className = 'entity-list';
+    entries.forEach((entry, i) => {
+      const item = document.createElement('li');
+      const button = document.createElement('button'); button.className = 'entity-button';
+      button.textContent = entry.name || 'Таблица ' + (i + 1);
+      button.onclick = () => files ? openEntry(entry) : selectTable(i);
+      item.appendChild(button); items.appendChild(item);
+    });
+    list.appendChild(items); stage.appendChild(list);
+    status.textContent = S.error || (files ? 'Файлов: ' : 'Таблиц: ') + entries.length;
   }
   async function loadModuleFile(file) {
     try {
@@ -93,11 +197,24 @@
       $('pluginStatus').textContent = 'Подключён ' + file.name;
     } catch (err) {
       $('pluginStatus').textContent = 'Плагин не подключён: ' + err.message;
-      B.ui.selectTab('plugins');
+      B.ui.selectTab('settings');
     }
   }
 
   function renderView(view) {
+    const plural = n => {
+      const a = Math.abs(n) % 100, b = a % 10;
+      const word = a > 10 && a < 20 ? 'строк' : b === 1 ? 'строка' : b > 1 && b < 5 ? 'строки' : 'строк';
+      return n.toLocaleString('ru-RU') + ' ' + word;
+    };
+    summary.textContent = [
+      S.dataset.tables.length > 1 ? view.table.name : null,
+      view.total == null ? 'число строк пока неизвестно' : plural(view.total),
+      view.table.columns.length + ' кол.',
+      view.query.trim() ? 'найдено ' + (view.foundExact ? '' : 'не менее ') + view.found : null,
+      view.table.note
+    ].filter(Boolean).join(' · ');
+    summary.title = summary.textContent;
     choose(B.renderers, view.table).render(stage, view);
     B.ui.currentView = { host: stage, view };
     B.emit('view:render', B.ui.currentView);
@@ -158,14 +275,16 @@
   async function paint() {
     B.emit('view:reset');
     reading?.abort(); clearTimeout(debounce);
-    S.reading = false; paintChip(); paintTables();
-    $('emptyState').hidden = !!S.fileName;
-    $('fileContent').hidden = !S.fileName;
+    S.reading = false; paintFileState(); paintNavigation();
+    const hasContent = !!(S.fileName || S.collection);
+    $('emptyState').hidden = hasContent;
+    $('fileContent').hidden = !hasContent;
     if (S.opening) return;
+    if (S.location !== 'data') { paintList(); return; }
     if (!S.dataset) { pager.hidden = true; return; }
     // Keep the current table in place until the new result is ready.
     const request = reading = new AbortController();
-    S.reading = true; paintChip();
+    S.reading = true; paintFileState();
     stage.setAttribute('aria-busy', 'true');
     $('prev').disabled = $('next').disabled = true;
     status.textContent = S.query.trim() ? 'Поиск…' : 'Чтение строк…';
@@ -186,37 +305,17 @@
       $('prev').disabled = S.page === 0;
     } finally {
       if (reading === request) {
-        S.reading = false; paintChip(); stage.removeAttribute('aria-busy');
+        S.reading = false; paintFileState(); stage.removeAttribute('aria-busy');
       }
     }
   }
-  function paintTables() {
-    const list = S.dataset?.tables || [];
-    tableSelect.replaceChildren();
-    tableSelect.hidden = $('tableSep').hidden = list.length < 2;
-    for (const [i, table] of list.entries()) {
-      const option = document.createElement('option');
-      option.value = String(i); option.textContent = table.name || ('таблица ' + (i + 1));
-      tableSelect.appendChild(option);
-    }
-    tableSelect.value = String(S.active);
-    tableSelect.title = list[S.active]?.name || 'Таблица базы данных';
-  }
-  tableSelect.onchange = () => {
-    const active = Number(tableSelect.value);
-    if (!Number.isInteger(active) || !S.dataset?.tables[active]) return;
-    S.active = active; resetPages(); paint();
-  };
   progressive.onchange = () => {
     if (progressive.disabled || !S.source) return;
     const source = S.source;
     openSource(() => source, S.fileName, { preserve: true, mode: progressive.checked ? 'progressive' : 'memory' });
   };
-  function paintChip() {
-    slotFile.textContent = S.fileName || 'файл не выбран';
-    slotFile.classList.toggle('empty', !S.fileName);
-    slotInterp.textContent = S.interp?.name || 'интерпретатор';
-    slotInterp.classList.toggle('empty', !S.interp);
+  function paintFileState() {
+    $('interpreterInfo').textContent = S.interp ? 'Интерпретатор: ' + S.interp.name : 'Интерпретатор не выбран';
     progressive.checked = S.loadingMode === 'progressive';
     const alternatives = B.interpreters.filter(m => m.format === S.interp?.format && m.loadingMode);
     progressive.disabled = S.opening || !alternatives.some(m => m.loadingMode === 'memory') || !alternatives.some(m => m.loadingMode === 'progressive');
@@ -224,22 +323,22 @@
       'По умолчанию: до 100 МиБ — целиком в память, больше — прогрессивно. Смена режима переоткрывает файл.';
     const busy = S.opening || S.reading;
     const ready = S.interp && (!S.interp.fallback || U.isText(S.bytes || new Uint8Array()));
-    chip.dataset.state = busy ? 'loading' : !S.fileName || S.error ? 'stop' : ready ? 'go' : 'wait';
-    chip.title = busy ? 'Чтение данных' : ready ? 'Файл и интерпретатор готовы' : 'Выберите файл или интерпретатор';
+    fileState.dataset.state = busy ? 'loading' : S.error || (!S.fileName && !S.collection) ? 'stop' : S.location === 'files' ? 'go' : ready ? 'go' : 'wait';
+    fileState.title = busy ? 'Чтение данных' : S.error || (S.location === 'files' ? 'Папка открыта' : ready ? 'Файл и интерпретатор готовы' : 'Формат файла не распознан');
+    fileState.setAttribute('aria-label', fileState.title);
   }
-  slotFile.onclick = () => $('pickFile').click();
-  slotInterp.onclick = () => $('pickModule').click();
-  $('pickFile').onchange = e => { if (e.target.files[0]) openFile(e.target.files[0]); e.target.value = ''; };
+  $('openFile').onclick = () => $('pickFile').click();
+  $('pickFile').onchange = e => { openFiles(Array.from(e.target.files)); e.target.value = ''; };
   $('pickModule').onchange = e => { if (e.target.files[0]) loadModuleFile(e.target.files[0]); e.target.value = ''; };
   form.onsubmit = e => {
     e.preventDefault(); S.query = q.value; resetPages();
-    if (!S.fileName) return $('pickFile').click();
+    if (S.location !== 'data' || !S.dataset) return;
     paint();
   };
   q.oninput = () => {
     clear.hidden = !q.value;
     S.query = q.value; resetPages();
-    if (!S.dataset) return;
+    if (S.location !== 'data' || !S.dataset) return;
     reading?.abort(); clearTimeout(debounce);
     $('prev').disabled = $('next').disabled = true;
     debounce = setTimeout(paint, 120);
@@ -251,7 +350,7 @@
     if (B.ui.activeTab !== 'explorer') return;
     const editing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName) || document.activeElement?.isContentEditable;
     if (e.key === 'Escape' && document.activeElement === q) { q.blur(); }
-    else if (e.key === '/' && !editing && search()) { e.preventDefault(); q.focus(); }
+    else if (e.key === '/' && !editing && !form.hidden) { e.preventDefault(); q.focus(); }
     else if (!pager.hidden && !editing) {
       if (e.key === 'ArrowRight' && !$('next').disabled) $('next').click();
       if (e.key === 'ArrowLeft' && !$('prev').disabled) $('prev').click();
@@ -261,28 +360,46 @@
   addEventListener('dragenter', e => { e.preventDefault(); if (++dragDepth) document.body.classList.add('dragging'); });
   addEventListener('dragover', e => e.preventDefault());
   addEventListener('dragleave', () => { if (--dragDepth <= 0) { dragDepth = 0; document.body.classList.remove('dragging'); } });
-  addEventListener('drop', e => {
+  addEventListener('drop', async e => {
     e.preventDefault(); dragDepth = 0; document.body.classList.remove('dragging');
-    if (e.dataTransfer.files[0]) openFile(e.dataTransfer.files[0]);
+    // Capture entries during the event: the browser clears DataTransfer afterwards.
+    const items = Array.from(e.dataTransfer.items || []).filter(item => item.kind === 'file')
+      .map(item => ({ entry: item.webkitGetAsEntry?.(), file: item.getAsFile?.() }));
+    if (!items.length) return openFiles(Array.from(e.dataTransfer.files));
+    const version = ++selectionVersion;
+    try {
+      const entries = await U.dropEntries(items);
+      if (version !== selectionVersion) return;
+      if (items.length === 1 && !items[0].entry?.isDirectory && entries.length === 1) return openFile(entries[0].file);
+      const name = items.length === 1 && items[0].entry?.isDirectory ? items[0].entry.name : 'Выбранные файлы';
+      showCollection(name, entries);
+    } catch (error) {
+      if (version === selectionVersion) showCollection('Папка', [], 'Не удалось прочитать папку: ' + error.message);
+    }
   });
-  B.on('register', () => { form.hidden = !search(); paintChip(); });
+  B.on('register', () => { paintNavigation(); paintFileState(); });
+  B.on('tab:change', paintHeader);
   async function scanFolder() {
+    const version = selectionVersion;
     try {
       const response = await fetch('bouquet.files.json', { cache: 'no-store' });
-      if (!response.ok || S.fileName) return;
-      const list = (await response.json()).files || [];
-      for (const path of list) {
-        if (S.fileName) return;
-        // Open through the same cancellation boundary as manually chosen files.
-        await openSource(signal => U.urlSource(path, { signal }), decodeURIComponent(path.split('/').pop()));
-        if (S.source) return;
-        if (S.fileName !== decodeURIComponent(path.split('/').pop())) return;
-        S.fileName = null; S.dataset = null; stage.replaceChildren(); paint();
+      if (!response.ok || version !== selectionVersion) return;
+      const paths = (await response.json()).files || [], entries = [];
+      for (const path of paths) {
+        if (version !== selectionVersion) return;
+        try {
+          const source = await U.urlSource(path);
+          entries.push({ name: decodeURIComponent(path), load: () => source });
+        } catch { /* Unavailable manifest entries do not appear in the list. */ }
       }
-    } catch { /* file://: manual file selection remains available */ }
+      if (version !== selectionVersion || !entries.length) return;
+      const directory = entries[0].name.includes('/') ? entries[0].name.split('/').slice(0, -1).join('/') : '';
+      const name = directory && entries.every(entry => entry.name.startsWith(directory + '/')) ? directory : 'Файлы проекта';
+      showCollection(name, entries);
+    } catch { /* file://: manual file and folder selection remains available */ }
   }
   $('uploadFile').onclick = () => $('pickFile').click();
   $('addPlugin').onclick = () => $('pickModule').click();
-  B.ui.actions = { openFile, refresh: paint };
+  B.ui.actions = { openFile, openFiles, refresh: paint };
   form.hidden = !search(); paint(); B.ui.start(); scanFolder();
 })();

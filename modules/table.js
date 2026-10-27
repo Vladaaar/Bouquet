@@ -1,7 +1,6 @@
 /* Bouquet · модуль table — показ данных таблицей */
 (function () {
   const css = `
-.bq-meta{flex:none;color:var(--muted);font-size:13px;padding:0 6px 8px;display:flex;gap:10px;flex-wrap:wrap}
 .bq-wrap{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-box);overflow:auto;
   flex:1;min-height:0;max-width:100%;scrollbar-gutter:stable}
 .bq-table{border-collapse:separate;border-spacing:0;width:100%;font-size:14px}
@@ -35,21 +34,12 @@
       const t = view.table;
       const digits = numericColumns(t, view.rows);
 
-      const meta = document.createElement('div');
-      meta.className = 'bq-meta';
-      meta.textContent = [
-        view.total == null ? 'число строк пока неизвестно' : plural(view.total, 'строка', 'строки', 'строк'),
-        t.columns.length + ' кол.',
-        view.query.trim() ? 'найдено ' + (view.foundExact ? '' : 'не менее ') + view.found : null,
-        t.note
-      ].filter(Boolean).join(' · ');
-
       const wrap = document.createElement('div');
       wrap.className = 'bq-wrap';
 
       if (!view.rows.length) {
         wrap.innerHTML = '<div class="bq-empty">Ничего не нашлось. Попробуйте короче или очистите поиск.</div>';
-        host.replaceChildren(meta, wrap);
+        host.replaceChildren(wrap);
         return;
       }
 
@@ -71,7 +61,7 @@
         const td = e.target.closest('td[data-long]');
         if (td) td.classList.toggle('open');
       });
-      host.replaceChildren(meta, wrap);
+      host.replaceChildren(wrap);
     }
   });
 
@@ -89,9 +79,4 @@
     });
   }
 
-  function plural(n, one, few, many) {
-    const a = Math.abs(n) % 100, b = a % 10;
-    const word = (a > 10 && a < 20) ? many : b === 1 ? one : (b > 1 && b < 5) ? few : many;
-    return n.toLocaleString('ru-RU') + ' ' + word;
-  }
 })();

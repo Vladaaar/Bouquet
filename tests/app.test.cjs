@@ -5,6 +5,10 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+const crumbs = el => el('breadcrumbList').children.map(item => item.children[0]);
+const current = el => crumbs(el).at(-1);
+const pathLabel = el => crumbs(el).map(node => node.textContent).join(' / ');
+const back = el => crumbs(el).filter(node => node.onclick).at(-1).click();
 async function until(predicate) {
   for (let i = 0; i < 200; i++) { if (predicate()) return; await delay(5); }
   throw new Error('Timed out');
@@ -21,11 +25,12 @@ function setup({ fetch = async () => ({ ok: false }), withSearch = true } = {}) 
   }
   const elements = new Map();
   const el = id => { if (!elements.has(id)) elements.set(id, new Element()); return elements.get(id); };
+  el('settingsTabs').hidden = true;
   const body = new Element();
   const context = vm.createContext({ console, Blob, TextDecoder, TextEncoder, Uint8Array, ArrayBuffer, DataView, DOMException, AbortController, setTimeout, clearTimeout,
     document: { body, head: new Element(), querySelector: () => el('bar'), getElementById: el, createElement: () => new Element() }, addEventListener() {}, scrollTo() {}, fetch });
   context.window = context;
-  for (const f of ['core/bouquet.js', 'core/sources.js', ...(withSearch ? ['modules/search.js'] : [])]) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), context);
+  for (const f of ['core/bouquet.js', 'core/sources.js', 'core/files.js', ...(withSearch ? ['modules/search.js'] : [])]) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), context);
   const views = [];
   context.Bouquet.register({ kind: 'renderer', id: 'capture', priority: 100, test: () => true, render: (_, view) => views.push(view) });
   for (const f of ['modules/themes.js', 'core/ui.js', 'core/app.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), context);
@@ -34,11 +39,12 @@ function setup({ fetch = async () => ({ ok: false }), withSearch = true } = {}) 
     if (size != null) Object.defineProperty(file, 'size', { value: size });
     el('pickFile').onchange({ target: { files: [file], value: name } });
   };
+  const select = i => el('stage').children[0].children[1].children[i].children[0].click();
   const submit = () => el('searchForm').onsubmit({ preventDefault() {} });
-  return { el, context, views, choose, submit };
+  return { el, context, views, choose, submit, select };
 }
 test('async UI pagination, table reset, progress, cancellation and latest-query wins', async () => {
-  const { el, context, views, choose, submit } = setup();
+  const { el, context, views, choose, submit, select } = setup();
   let closed = 0;
   context.Bouquet.register({ kind: 'interpreter', id: 'lazy', priority: 100, name: 'Lazy', test: () => true,
     async open() { return { tables: [0, 1].map(i => ({ name: 'table' + i, columns: ['value'],
@@ -55,36 +61,38 @@ test('async UI pagination, table reset, progress, cancellation and latest-query 
       }
     })), close() { closed++; } }; }
   });
-  choose(); await until(() => el('chip').dataset.state === 'go');
-  await until(() => views.length === 1);
+  choose(); await until(() => el('stage').children.length > 0);
+  assert.equal(views.length, 0); // Multi-table sources wait for an explicit choice.
+  select(0); await until(() => views.length === 1);
   assert.equal(views.at(-1).rows.length, 100);
   el('next').click(); await until(() => views.at(-1).page === 1);
   assert.equal(views.at(-1).rows[0].n, 101);
   el('prev').click(); await until(() => views.at(-1).page === 0);
-  el('tableSelect').value = '1'; el('tableSelect').onchange(); await until(() => views.at(-1).table.name === 'table1');
-  choose('other.lazy'); await until(() => views.at(-1).table.name === 'table0' && closed === 1);
+  back(el); select(1); await until(() => views.at(-1).table.name === 'table1');
+  choose('other.lazy'); await until(() => el('stage').children.length > 0 && closed === 1);
+  select(0); await until(() => views.at(-1).table.name === 'table0');
   el('q').value = 'slow'; submit(); await until(() => views.at(-1).rows[0]?.cells[0] === 'slow');
   el('q').value = '99'; submit(); await until(() => views.at(-1).query === '99');
   await delay(100);
   assert.equal(views.at(-1).query, '99');
   assert.equal(views.at(-1).rows[0].cells[0], '99');
-  assert.equal(el('chip').dataset.state, 'go');
+  assert.equal(el('fileState').dataset.state, 'go');
 });
 test('legacy parsers receive complete buffers and newest open wins', async () => {
-  const { el, context, views, choose, submit } = setup();
+  const { el, context, views, choose, submit, select } = setup();
   context.Bouquet.register({ kind: 'interpreter', id: 'legacy', priority: 100, name: 'Legacy', test: () => true,
     async parse({ buffer, name }) { assert.equal(buffer.byteLength, 4); if (name === 'slow.txt') await delay(80);
       return { tables: [{ name, columns: ['name'], rows: [[name]] }] }; }
   });
   choose('slow.txt'); await delay(5); choose('new.txt');
-  await until(() => el('chip').dataset.state === 'go'); submit();
+  await until(() => el('fileState').dataset.state === 'go'); submit();
   await until(() => views.length > 0); await delay(100);
   assert.equal(views.at(-1).table.name, 'new.txt');
   assert.equal(views.at(-1).total, 1);
 });
 
 test('SQLite auto mode boundary, manual toggle, query/table preservation and new-file reset', async () => {
-  const { el, context, views, choose, submit } = setup();
+  const { el, context, views, choose, submit, select } = setup();
   const opened = [];
   const dataset = () => ({ tables: [0, 1].map(i => ({ name: 't' + i, columns: ['name'], rows: [['value']] })) });
   for (const mode of ['progressive', 'memory']) {
@@ -96,9 +104,8 @@ test('SQLite auto mode boundary, manual toggle, query/table preservation and new
   choose('boundary.db', 100 * 1024 * 1024);
   await until(() => !el('progressive').disabled);
   assert.equal(opened.at(-1), 'memory'); assert.equal(el('progressive').checked, false);
-  assert.equal(el('tableSelect').hidden, false);
-  submit(); await until(() => views.length > 0);
-  el('tableSelect').value = '1'; el('tableSelect').onchange();
+  assert.equal(views.length, 0);
+  select(1); await until(() => views.length > 0);
   el('q').value = 'value'; submit(); await until(() => views.at(-1).query === 'value');
   el('progressive').checked = true; el('progressive').onchange();
   await until(() => !el('progressive').disabled && opened.at(-1) === 'progressive');
@@ -113,12 +120,14 @@ test('SQLite auto mode boundary, manual toggle, query/table preservation and new
 });
 
 
-test('empty state, immediate preview, persistent tabs and sidebar collapse', async () => {
-  const { el, context, views, choose, submit } = setup();
+test('header navigation preserves preview, query, pagination and scroll', async () => {
+  const { el, context, views, choose, submit, select } = setup();
   const ui = context.Bouquet.ui;
   assert.equal(ui.activeTab, 'explorer');
   assert.equal(el('emptyState').hidden, false);
   assert.equal(el('fileContent').hidden, true);
+  assert.equal(el('breadcrumbs').hidden, true);
+  assert.equal(el('settingsTabs').hidden, true);
   context.Bouquet.register({ kind: 'interpreter', id: 'many', name: 'Many', priority: 100,
     test: () => true, parse: () => ({ tables: [{ name: 'rows', columns: ['value'],
       rows: Array.from({ length: 220 }, (_, n) => ['match ' + n]) }] }) });
@@ -129,14 +138,19 @@ test('empty state, immediate preview, persistent tabs and sidebar collapse', asy
   el('next').click(); await until(() => views.at(-1).page === 1);
   el('stage').scrollTop = 80;
   const count = views.length, view = views.at(-1);
-  ui.selectTab('settings');
+  el('settingsButton').click();
   assert.equal(el('explorerPanel').hidden, true);
   assert.equal(el('settingsPanel').hidden, false);
-  ui.selectTab('plugins'); ui.selectTab('explorer');
-  el('sidebarToggle').click();
-  assert.equal(el('sidebarToggle').attrs['aria-expanded'], 'false');
-  el('sidebarToggle').click();
-  assert.equal(el('sidebarToggle').attrs['aria-expanded'], 'true');
+  ui.selectTab('plugins');
+  assert.equal(ui.activeTab, 'settings');
+  assert.equal(el('settingsPanel').hidden, false);
+  assert.ok(el('pluginList').children.length > 0);
+  assert.equal(el('settingsButton').attrs['aria-current'], 'page');
+  el('homeButton').click();
+  assert.equal(ui.activeTab, 'explorer');
+  assert.equal(current(el)?.textContent, 'test.lazy');
+  assert.equal(el('breadcrumbs').hidden, false);
+  assert.equal(el('settingsButton').attrs['aria-current'], undefined);
   assert.equal(views.length, count);
   assert.equal(views.at(-1), view);
   assert.equal(el('q').value, 'match');
@@ -152,7 +166,10 @@ test('plugins extend the live interface and theme loading preserves the current 
     api.elements.toolbar.setAttribute('data-custom', 'yes');
     api.addTab({ id: 'extra', label: 'Extra', mount(panel) { mounts++; panel.textContent = 'Kept'; } });
   } });
-  ui.selectTab('extra'); ui.selectTab('explorer'); ui.selectTab('extra');
+  assert.equal(el('settingsTabs').hidden, false);
+  el('settingsTabs').children[0].click();
+  assert.equal(ui.activeTab, 'extra');
+  ui.selectTab('explorer'); ui.selectTab('extra');
   assert.equal(mounts, 1);
   assert.equal(el('bar').attrs['data-custom'], 'yes');
   const count = views.length;
@@ -202,4 +219,168 @@ test('unavailable manifest files return to upload and manual preview works witho
   choose('manual.txt'); await until(() => views.length > 0);
   assert.equal(el('emptyState').hidden, true);
   assert.equal(views.at(-1).rows[0].cells[0], 'data');
+});
+
+test('folder files are listed without reading, selection is lazy, and back keeps the folder', async () => {
+  const { el, context, views, select } = setup();
+  const files = ['folder/nested/b.txt', 'folder/a.txt'].map(name =>
+    Object.assign(new Blob([name]), { name: name.split('/').pop(), webkitRelativePath: name }));
+  context.Bouquet.ui.actions.openFiles(files, { folder: true });
+  assert.equal(current(el)?.textContent, 'folder');
+  assert.equal(views.length, 0);
+  assert.equal(el('searchForm').hidden, true);
+  assert.equal(el('stage').children[0].children[1].children[0].children[0].textContent, 'folder/a.txt');
+  context.Bouquet.ui.selectTab('settings'); context.Bouquet.ui.selectTab('explorer');
+  assert.equal(views.length, 0);
+  select(1); await until(() => views.length === 1);
+  assert.equal(views[0].rows[0].cells[0], 'folder/nested/b.txt');
+  back(el);
+  assert.equal(current(el)?.textContent, 'folder');
+  assert.equal(context.Bouquet.ui.currentView, null);
+  select(0); await until(() => views.length === 2);
+  assert.equal(views[1].rows[0].cells[0], 'folder/a.txt');
+});
+
+test('returning to the table list aborts a pending read and ignores its stale result', async () => {
+  const { el, context, views, choose, select } = setup();
+  let release, signal;
+  context.Bouquet.register({ kind: 'interpreter', id: 'delayed-tables', priority: 100, test: () => true,
+    open: () => ({ tables: [{ name: 'slow', columns: ['value'], async read(args) {
+      signal = args.signal; await new Promise(resolve => { release = resolve; });
+      return { rows: [{ n: 1, cells: ['stale'] }], hasMore: false };
+    } }, { name: 'ready', columns: ['value'], rows: [['fresh']] }] }) });
+  choose(); await until(() => el('stage').children.length);
+  select(0); await until(() => release);
+  back(el);
+  assert.equal(signal.aborted, true);
+  select(1); await until(() => views.length === 1);
+  release(); await delay(10);
+  assert.equal(views.length, 1);
+  assert.equal(views[0].rows[0].cells[0], 'fresh');
+});
+
+test('folder JavaScript stays data, empty folders show a note, and a single file opens directly', async () => {
+  const { el, context, views, select } = setup();
+  const files = ['a.js', 'b.txt'].map(name => Object.assign(new Blob(['throw new Error("Do not execute")']), { name }));
+  context.Bouquet.ui.actions.openFiles(files);
+  select(0); await until(() => views.length === 1);
+  assert.equal(current(el)?.textContent, 'a.js');
+  assert.equal(context.Bouquet.ui.activeTab, 'explorer');
+  context.Bouquet.ui.actions.openFiles([], { folder: true });
+  assert.equal(el('stage').children[0].children[1].textContent, 'В папке нет файлов');
+  assert.equal(el('searchForm').hidden, true);
+  context.Bouquet.ui.actions.openFiles([files[1]]);
+  await until(() => views.length === 2);
+  assert.equal(current(el)?.textContent, 'b.txt');
+});
+
+test('manifest lists only accessible sources and defers parsing until selection', async () => {
+  const { el, views, select } = setup({ fetch: async url => {
+    if (url === 'bouquet.files.json') return { ok: true, json: async () => ({ files: ['one.txt', 'missing.txt', 'two.txt'] }) };
+    if (url === 'missing.txt') throw new Error('Unavailable');
+    return { ok: true, status: 200, blob: async () => new Blob([url]) };
+  } });
+  await until(() => current(el)?.textContent === 'Файлы проекта');
+  assert.equal(views.length, 0);
+  assert.equal(el('stage').children[0].children[1].children.length, 2);
+  select(1); await until(() => views.length === 1);
+  assert.equal(views[0].rows[0].cells[0], 'two.txt');
+});
+
+test('manual folder selection wins over a pending manifest response', async () => {
+  let release;
+  const { el, context } = setup({ fetch: () => new Promise(resolve => { release = resolve; }) });
+  context.Bouquet.ui.actions.openFiles([
+    Object.assign(new Blob(['local']), { name: 'local.txt', webkitRelativePath: 'local/local.txt' })
+  ], { folder: true });
+  await until(() => pathLabel(el) === 'local / local.txt');
+  release({ ok: true, json: async () => ({ files: ['remote.txt'] }) });
+  await delay(10);
+  assert.equal(pathLabel(el), 'local / local.txt');
+});
+
+test('dropped folders traverse all directory batches including nested folders', async () => {
+  const { context } = setup();
+  const file = name => ({ isFile: true, name, file(resolve) { resolve(Object.assign(new Blob([name]), { name })); } });
+  const directory = (name, batches) => ({ isDirectory: true, name,
+    createReader() { let i = 0; return { readEntries(resolve) { resolve(batches[i++] || []); } }; } });
+  const nested = directory('nested', [[file('b.txt')]]);
+  const root = directory('root', [[file('a.txt')], [nested], [file('c.txt')]]);
+  const entries = await context.Bouquet.util.dropEntries([{ entry: root }]);
+  assert.equal(entries.map(entry => entry.name).join(','), 'root/a.txt,root/c.txt,root/nested/b.txt');
+});
+
+test('opening a picker preserves the current source and pending reads until a new selection', async () => {
+  const { el, context, views, choose } = setup();
+  let release, signal, closed = 0, picked = 0;
+  el('pickFile').onclick = () => { picked++; };
+  context.Bouquet.register({ kind: 'interpreter', id: 'open-pending', priority: 100, test: () => true,
+    open: () => ({ close() { closed++; }, tables: [{ name: 'pending', columns: ['value'], async read(args) {
+      signal = args.signal; await new Promise(resolve => { release = resolve; });
+      return { rows: [{ n: 1, cells: ['kept'] }], hasMore: false };
+    } }] }) });
+  choose(); await until(() => release);
+  el('openFile').click();
+  assert.equal(picked, 1);
+  assert.equal(closed, 0);
+  assert.equal(signal.aborted, false);
+  assert.equal(el('emptyState').hidden, true);
+  assert.equal(el('fileContent').hidden, false);
+  release(); await until(() => views.length);
+  assert.equal(views[0].rows[0].cells[0], 'kept');
+});
+
+test('one status summary reports totals and matches alongside file state', async () => {
+  const { el, views, choose, submit } = setup();
+  choose('test.txt'); await until(() => views.length);
+  assert.equal(el('dataSummary').textContent, '1 строка · 1 кол.');
+  assert.equal(el('fileState').dataset.state, 'go');
+  el('q').value = 'absent'; submit(); await until(() => views.at(-1).query === 'absent');
+  assert.equal(el('dataSummary').textContent, '1 строка · 1 кол. · найдено 0');
+  let picked = 0; el('pickFile').onclick = () => { picked++; };
+  current(el).click();
+  assert.equal(picked, 0);
+  el('openFile').click();
+  assert.equal(picked, 1);
+  assert.equal(el('fileContent').hidden, false);
+  assert.equal(el('dataSummary').textContent, '1 строка · 1 кол. · найдено 0');
+});
+
+test('settings replace the file path and actions, and close restores the exact explorer view', async () => {
+  const { el, views, choose } = setup();
+  choose('file.txt'); await until(() => views.length);
+  const previous = views[0];
+  el('settingsButton').click();
+  assert.equal(pathLabel(el), 'Настройки');
+  assert.equal(el('openFile').hidden, true);
+  assert.equal(el('settingsButton').hidden, true);
+  assert.equal(el('closeSettings').hidden, false);
+  el('closeSettings').click();
+  assert.equal(pathLabel(el), 'file.txt');
+  assert.equal(el('openFile').hidden, false);
+  assert.equal(el('closeSettings').hidden, true);
+  assert.equal(views.length, 1);
+  assert.equal(views[0], previous);
+});
+
+test('multiple picked files create a path whose parents navigate and current element is inert', async () => {
+  const { el, context, views, select } = setup();
+  context.Bouquet.register({ kind: 'interpreter', id: 'path-tables', priority: 100, test: () => true,
+    parse: () => ({ tables: [{ name: 'first', columns: ['value'], rows: [['one']] },
+      { name: 'second', columns: ['value'], rows: [['two']] }] }) });
+  const files = ['one.db', 'two.db'].map(name => Object.assign(new Blob(['data']), { name }));
+  el('pickFile').onchange({ target: { files, value: '' } });
+  assert.equal(pathLabel(el), 'Выбранные файлы');
+  assert.equal(views.length, 0);
+  select(0); await until(() => crumbs(el).length === 2 && el('stage').children.length > 0);
+  assert.equal(pathLabel(el), 'Выбранные файлы / one.db');
+  assert.equal(current(el).onclick, undefined);
+  select(1); await until(() => views.length);
+  assert.equal(pathLabel(el), 'Выбранные файлы / one.db / second');
+  assert.equal(current(el).onclick, undefined);
+  crumbs(el)[1].click();
+  assert.equal(pathLabel(el), 'Выбранные файлы / one.db');
+  crumbs(el)[0].click();
+  assert.equal(pathLabel(el), 'Выбранные файлы');
+  assert.equal(el('searchForm').hidden, true);
 });

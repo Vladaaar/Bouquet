@@ -8,11 +8,11 @@
   themeStyle.id = 'bouquet-theme';
   document.head.appendChild(themeStyle);
   const UI = B.ui = {
-    root: $('app'), document, actions: {}, activeTab: 'explorer', theme: null,
-    elements: { sidebar: $('sidebar'), navigation: $('sidebarTabs'), workspace: $('workspace'),
+    root: $('app'), document, actions: {}, activeTab: 'explorer', activeLabel: 'Bouquet', theme: null,
+    elements: { header: $('header'), navigation: $('settingsTabs'), workspace: $('workspace'),
       explorer: $('explorerPanel'), plugins: $('pluginsPanel'), settings: $('settingsPanel'),
       toolbar: document.querySelector('.bar'), stage: $('stage'), pager: $('pager') },
-    addTab({ id, label, icon = '◇', panel, mount }) {
+    addTab({ id, label, icon = '◇', panel, mount, button }) {
       if (!id || tabs.has(id)) throw new Error('Вкладке нужен уникальный id');
       if (!panel) {
         panel = document.createElement('section');
@@ -21,27 +21,31 @@
       }
       panel.id = panel.id || 'panel-' + id;
       panel.setAttribute('aria-label', label);
-      const button = document.createElement('button');
-      button.className = 'sidebar-tab';
+      if (!button) {
+        button = document.createElement('button');
+        button.className = 'extension-tab';
+        const glyph = document.createElement('span');
+        glyph.textContent = icon; glyph.setAttribute('aria-hidden', 'true');
+        const text = document.createElement('span'); text.textContent = label;
+        button.appendChild(glyph); button.appendChild(text);
+        $('settingsTabs').appendChild(button);
+        $('settingsTabs').hidden = false;
+      }
       button.title = label;
       button.setAttribute('aria-label', label);
       button.setAttribute('aria-controls', panel.id);
-      const glyph = document.createElement('span');
-      glyph.className = 'tab-icon'; glyph.textContent = icon; glyph.setAttribute('aria-hidden', 'true');
-      const text = document.createElement('span');
-      text.className = 'sidebar-label'; text.textContent = label;
-      button.appendChild(glyph); button.appendChild(text);
       button.onclick = () => UI.selectTab(id);
       tabs.set(id, { button, panel });
-      $('sidebarTabs').appendChild(button);
       panel.hidden = id !== UI.activeTab;
       if (!panel.hidden) button.setAttribute('aria-current', 'page');
       mount?.(panel, UI);
       return panel;
     },
     selectTab(id) {
+      if (id === 'plugins') id = 'settings'; // Legacy plugins now share the settings page.
       if (!tabs.has(id)) throw new Error('Неизвестная вкладка: ' + id);
       UI.activeTab = id;
+      UI.activeLabel = tabs.get(id).button.title;
       for (const [key, { button, panel }] of tabs) {
         panel.hidden = key !== id;
         if (key === id) button.setAttribute('aria-current', 'page');
@@ -67,18 +71,9 @@
       B.emit('ui:ready', UI);
     }
   };
-  UI.addTab({ id: 'explorer', label: 'Исследование файлов', icon: '▤', panel: $('explorerPanel') });
-  UI.addTab({ id: 'plugins', label: 'Плагины', icon: '◇', panel: $('pluginsPanel') });
-  UI.addTab({ id: 'settings', label: 'Настройки', icon: '⚙', panel: $('settingsPanel') });
-  let collapsed = false;
-  $('sidebarToggle').onclick = () => {
-    collapsed = !collapsed;
-    UI.root.classList.toggle('sidebar-collapsed', collapsed);
-    $('sidebarToggle').textContent = collapsed ? '›' : '‹';
-    $('sidebarToggle').setAttribute('aria-expanded', String(!collapsed));
-    $('sidebarToggle').setAttribute('aria-label', collapsed ? 'Развернуть сайдбар' : 'Свернуть сайдбар');
-    B.emit('sidebar:change', { collapsed });
-  };
+  UI.addTab({ id: 'explorer', label: 'Bouquet — вернуться к файлу', panel: $('explorerPanel'), button: $('homeButton') });
+  UI.addTab({ id: 'settings', label: 'Настройки', panel: $('settingsPanel'), button: $('settingsButton') });
+  $('closeSettings').onclick = () => UI.selectTab('explorer');
   function mountPlugin(plugin) {
     if (mounted.has(plugin.id)) return;
     mounted.add(plugin.id);
