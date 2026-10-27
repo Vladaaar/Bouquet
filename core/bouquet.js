@@ -106,7 +106,20 @@
       const pre = document.createElement('pre');
       pre.className = 'plain';
       if (view.table.messageKey) {
-        CORE.i18n.bind(pre, view.table.messageKey, view.table.messageParams);
+        const message = document.createElement('span');
+        CORE.i18n.bind(message, view.table.messageKey, view.table.messageParams);
+        pre.appendChild(message);
+        if (view.table.messageKey === 'unknownFile') {
+          const link = document.createElement('a'); link.href = '#pluginsPanel';
+          CORE.i18n.bind(link, 'pluginsLink');
+          link.onclick = event => {
+            event.preventDefault(); CORE.ui.selectTab('settings');
+            CORE.ui.elements.plugins.scrollIntoView({ block: 'start' });
+            document.getElementById('addPlugin').focus({ preventScroll: true });
+          };
+          const period = document.createElement('span'); period.textContent = '.';
+          pre.appendChild(link); pre.appendChild(period);
+        }
         host.replaceChildren(pre); return;
       }
       pre.innerHTML = view.rows.map(r =>

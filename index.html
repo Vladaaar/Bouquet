@@ -21,7 +21,7 @@
   <div class="empty-state" id="emptyState">
     <button class="upload-button" id="uploadFile"><span aria-hidden="true">📂</span><span data-i18n="open">Открыть</span></button>
     <p data-i18n="chooseHint">Выберите один или несколько файлов либо перетащите их сюда</p>
-    <small data-i18n="privacy">SQLite, CSV, TSV и текст · Данные остаются в браузере</small>
+    <small data-i18n="privacy">SQLite, XLS/XLSX, CSV, TSV и текст · Данные остаются в браузере</small>
   </div>
   <div class="file-content" id="fileContent" hidden>
   <div class="bar">
@@ -90,6 +90,7 @@
 <!-- Модули. Файла нет — строка просто игнорируется, ядро останется рабочим. -->
 <script src="modules/table.js"></script>
 <script src="modules/csv.js"></script>
+<script src="modules/excel.js"></script>
 <script src="modules/sqlite.js"></script>
 <script src="modules/sqlite_full_load.js"></script>
 <script src="modules/search.js"></script>

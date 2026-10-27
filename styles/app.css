@@ -93,6 +93,7 @@ input[type=checkbox]{accent-color:var(--iris)}
 .plain{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-box);padding:18px 22px;
   margin:0;font:13.5px/1.7 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre-wrap;
   word-break:break-word;overflow:auto;min-height:0}
+.plain a{color:var(--iris);text-underline-offset:3px}
 .plain .ln{color:var(--muted);user-select:none;display:inline-block;min-width:5ch;text-align:right;margin-right:16px}
 mark{background:color-mix(in srgb,var(--iris) 28%,transparent);color:inherit;border-radius:4px;padding:0 2px}
 
