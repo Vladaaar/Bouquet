@@ -10,7 +10,7 @@ A lightweight browser viewer for SQLite, CSV, TSV, and plain text. Works offline
 - **Find what matters.** Search words, `"exact phrases"`, `-exclusions`, or `column:value`, with matching text highlighted.
 - **Follow the connections.** Click 🔗 beside a SQLite key to see related records in a side drawer. Uses declared foreign keys, in both directions.
 - **Browse large databases.** Progressive SQLite reading loads rows as needed instead of loading the whole database into memory.
-- **Make it yours.** Add formats, views, sections, and themes through JavaScript plugins. Open settings with the gear in the header; return to your file with the Bouquet logo without losing your search.
+- **Make it yours.** Add formats, views, sections, themes, and language packs through JavaScript plugins. Open settings with the gear in the header; return to your file with the Bouquet logo without losing your search.
 
 **Try it:** download the project, keep its folders together, and open `index.html` in your browser. Use “📂 Открыть” to choose one or more files, drop files into the window, or select [`data/example.db`](data/example.db).
 
@@ -24,7 +24,7 @@ python3 -m http.server 8000
 
 Then visit [localhost:8000](http://localhost:8000). A server is optional; picking files manually works offline.
 
-Bouquet is a viewer: no SQL console or editing. Search on large SQLite tables may scan the whole table; CSV, TSV, and text files currently load into memory. The interface is currently in Russian.
+Bouquet is a viewer: no SQL console or editing. Search on large SQLite tables may scan the whole table; CSV, TSV, and text files currently load into memory. The interface includes Russian and English. Choose a language card in Settings; add more languages through plugins.
 
 [Full documentation & plugin API (Russian)](README_RU.md)
 

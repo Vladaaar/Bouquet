@@ -11,8 +11,14 @@
     features: {},
 
     register(mod) {
-      if (!mod || !mod.id || !mod.kind) throw new Error('Модулю нужны id и kind');
-      if (CORE.plugins.some(plugin => plugin.id === mod.id)) throw new Error('Плагин уже подключён: ' + mod.id);
+      if (!mod || !mod.id || !mod.kind) throw (CORE.i18n?.error('Модулю нужны id и kind') || new Error('Модулю нужны id и kind'));
+      if (CORE.plugins.some(plugin => plugin.id === mod.id)) throw (CORE.i18n?.error('Плагин уже подключён: {id}', { id: mod.id }) || new Error('Плагин уже подключён: ' + mod.id));
+      if (mod.category === 'language') {
+        try {
+          if (typeof mod.locale !== 'string' || !mod.messages || typeof mod.messages !== 'object' || Array.isArray(mod.messages)) throw new Error();
+          new Intl.PluralRules(mod.locale);
+        } catch { throw CORE.i18n.error('invalidLanguage'); }
+      }
       CORE.plugins.push(mod);
       if (mod.kind === 'interpreter') CORE.interpreters.push(mod);
       else if (mod.kind === 'renderer') CORE.renderers.push(mod);
@@ -29,7 +35,7 @@
       const before = CORE.interpreters.length + CORE.renderers.length + Object.keys(CORE.features).length;
       new Function('Bouquet', code + '\n//# sourceURL=' + (label || 'module.js'))(CORE);
       const after = CORE.interpreters.length + CORE.renderers.length + Object.keys(CORE.features).length;
-      if (after === before) throw new Error('Файл не зарегистрировал ни одного модуля');
+      if (after === before) throw CORE.i18n.error('Файл не зарегистрировал ни одного модуля');
     },
 
     util: {
@@ -64,9 +70,12 @@
         return { name: fallbackName, tables: [] };
       },
       /* текст -> таблица из одной колонки (ядро так показывает простой текст) */
+      messageTable(key, params, nameKey) {
+        return { ...CORE.util.textTable(CORE.i18n.t(key, params), CORE.i18n.t(nameKey)), messageKey: key, messageParams: params, nameKey };
+      },
       textTable(text, name) {
         return {
-          name: name || 'текст', plain: true, columns: ['строка'],
+          name: name || CORE.i18n.t('data.text'), plain: true, columns: [CORE.i18n.t('data.line')], columnKeys: ['data.line'],
           rows: text.replace(/\r\n?/g, '\n').split('\n').map(l => [l])
         };
       }
@@ -76,15 +85,13 @@
 
   /* --- встроенный интерпретатор: простой текст --- */
   CORE.register({
-    kind: 'interpreter', id: 'core-text', name: 'Текст', priority: -100, fallback: true,
+    kind: 'interpreter', id: 'core-text', name: 'Текст', nameKey: 'plugin.text', priority: -100, fallback: true,
     test() { return true; },
     parse({ buffer, name }) {
       const bytes = new Uint8Array(buffer);
       if (!CORE.util.isText(bytes)) {
         return {
-          name, tables: [CORE.util.textTable(
-            'Формат не распознан: ' + name + ' (' + bytes.length + ' байт).\n' +
-            'Подключите подходящий плагин-интерпретатор на вкладке «Плагины».', 'нет интерпретатора')]
+          name, tables: [CORE.util.messageTable('unknownFile', { name, bytes: bytes.length }, 'noInterpreterName')]
         };
       }
       return { name, tables: [CORE.util.textTable(CORE.util.decode(buffer), name)] };
@@ -93,14 +100,18 @@
 
   /* --- встроенный вид: простой текст + запасной вид для таблиц --- */
   CORE.register({
-    kind: 'renderer', id: 'core-plain', name: 'Текст', priority: -100,
+    kind: 'renderer', id: 'core-plain', name: 'Текст', nameKey: 'plugin.text', priority: -100,
     test() { return true; },
     render(host, view) {
       const pre = document.createElement('pre');
       pre.className = 'plain';
+      if (view.table.messageKey) {
+        CORE.i18n.bind(pre, view.table.messageKey, view.table.messageParams);
+        host.replaceChildren(pre); return;
+      }
       pre.innerHTML = view.rows.map(r =>
         '<span class="ln">' + r.n + '</span>' + view.highlight(r.cells.join('\t'))
-      ).join('\n') || '<span class="ln"> </span>Ничего не найдено';
+      ).join('\n') || '<span data-i18n="notFound">' + CORE.util.escape(CORE.i18n.t('notFound')) + '</span>';
       host.replaceChildren(pre);
     }
   });

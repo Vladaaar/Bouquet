@@ -10,24 +10,24 @@
 
 <div class="app" id="app">
   <header class="app-header" id="header">
-    <button class="brand" id="homeButton" aria-label="Bouquet — вернуться к просмотру"><span title="💐 Bouquet, @vladaaar, 2026" aria-hidden="true">💐</span> Bouquet</button>
-    <nav class="breadcrumbs" id="breadcrumbs" aria-label="Текущее расположение" hidden><ol id="breadcrumbList"></ol></nav>
-    <button class="open-button" id="openFile" hidden><span aria-hidden="true">📂</span> Открыть</button>
-    <button class="file-control" id="closeSettings" title="Вернуться к просмотру" aria-label="Вернуться к просмотру" hidden>×</button>
-    <button class="settings-button" id="settingsButton" title="Настройки" aria-label="Настройки" aria-controls="settingsPanel"><span aria-hidden="true">⚙</span></button>
+    <button class="brand" id="homeButton" aria-label="Bouquet — вернуться к просмотру" data-i18n-aria-label="home"><span title="💐 Bouquet, @vladaaar, 2026" aria-hidden="true">💐</span> Bouquet</button>
+    <nav class="breadcrumbs" id="breadcrumbs" aria-label="Текущее расположение" data-i18n-aria-label="path" hidden><ol id="breadcrumbList"></ol></nav>
+    <button class="open-button" id="openFile" hidden><span aria-hidden="true">📂</span> <span data-i18n="open">Открыть</span></button>
+    <button class="file-control" id="closeSettings" title="Вернуться к просмотру" aria-label="Вернуться к просмотру" data-i18n-title="back" data-i18n-aria-label="back" hidden>×</button>
+    <button class="settings-button" id="settingsButton" title="Настройки" aria-label="Настройки" data-i18n-title="settings" data-i18n-aria-label="settings" aria-controls="settingsPanel"><span aria-hidden="true">⚙</span></button>
   </header>
   <main class="workspace" id="workspace">
-  <section class="explorer panel" id="explorerPanel" aria-label="Исследование файлов">
+  <section class="explorer panel" id="explorerPanel" aria-label="Просмотр файлов" data-i18n-aria-label="explorer">
   <div class="empty-state" id="emptyState">
-    <button class="upload-button" id="uploadFile"><span aria-hidden="true">📂</span>Открыть</button>
-    <p>Выберите один или несколько файлов либо перетащите их сюда</p>
-    <small>SQLite, CSV, TSV и текст · Данные остаются в браузере</small>
+    <button class="upload-button" id="uploadFile"><span aria-hidden="true">📂</span><span data-i18n="open">Открыть</span></button>
+    <p data-i18n="chooseHint">Выберите один или несколько файлов либо перетащите их сюда</p>
+    <small data-i18n="privacy">SQLite, CSV, TSV и текст · Данные остаются в браузере</small>
   </div>
   <div class="file-content" id="fileContent" hidden>
   <div class="bar">
     <form class="search" id="searchForm" hidden>
-      <input id="q" type="search" aria-label="Искать в файле" autocomplete="off" spellcheck="false" placeholder="Искать в файле">
-      <button class="clear" id="clear" type="button" hidden aria-label="Очистить поиск">×</button>
+      <input id="q" type="search" aria-label="Искать в файле" autocomplete="off" spellcheck="false" placeholder="Искать в файле" data-i18n-placeholder="search" data-i18n-aria-label="search">
+      <button class="clear" id="clear" type="button" hidden aria-label="Очистить поиск" data-i18n-aria-label="clear">×</button>
     </form>
   </div>
 
@@ -39,44 +39,51 @@
   <div class="stage" id="stage"></div>
 
   <nav class="pager" id="pager" hidden>
-    <button id="prev" aria-label="Назад">‹</button>
+    <button id="prev" aria-label="Назад" data-i18n-aria-label="previous">‹</button>
     <span class="pos" id="pos"></span>
-    <button id="next" aria-label="Вперёд">›</button>
+    <button id="next" aria-label="Вперёд" data-i18n-aria-label="next">›</button>
   </nav>
 
   </div>
   </section>
-  <section class="panel content-panel" id="settingsPanel" aria-label="Настройки" hidden>
-    <h1>Настройки</h1>
-    <nav class="extension-navigation" id="settingsTabs" aria-label="Разделы плагинов" hidden></nav>
-    <div class="settings-card">
-      <h2>Чтение файлов</h2>
-      <p id="interpreterInfo">Интерпретатор не выбран</p>
-      <label><input id="progressive" type="checkbox" disabled> Прогрессивная загрузка</label>
-      <p id="loadingHint">Выберите SQLite-файл</p>
-    </div>
-    <div class="settings-card">
-      <h2>Оформление</h2>
-      <label for="themeSelect">Тема — плагин оформления</label>
-      <select id="themeSelect" aria-label="Тема оформления"></select>
-    </div>
-    <section class="plugins-section" id="pluginsPanel" aria-label="Плагины">
-      <h2>Плагины</h2>
-      <p>Форматы, поиск, интерфейс и темы оформления подключаются плагинами.</p>
-      <button class="action-button" id="addPlugin">Подключить плагин .js</button>
+  <section class="panel content-panel" id="settingsPanel" aria-label="Настройки" data-i18n-aria-label="settings" hidden>
+    <h1 data-i18n="settings">Настройки</h1>
+    <nav class="extension-navigation" id="settingsTabs" aria-label="Разделы плагинов" data-i18n-aria-label="pluginSections" hidden></nav>
+    <section class="settings-section" id="languagesPanel">
+      <h2 data-i18n="languageHeading">🌐 Язык</h2>
+      <p data-i18n="languageHint">Языковые пакеты переводят интерфейс. Другие языки можно подключить плагином .js.</p>
+      <div class="plugin-list" id="languageList"></div>
+    </section>
+    <section class="settings-section" id="pluginsPanel">
+      <h2 data-i18n="pluginsHeading">🔌 Плагины</h2>
+      <p data-i18n="pluginHint">Форматы, поиск и интерфейс подключаются плагинами.</p>
+      <button class="action-button" id="addPlugin" data-i18n="addPlugin">Подключить плагин .js</button>
       <p id="pluginStatus" role="status" aria-live="polite"></p>
       <div class="plugin-list" id="pluginList"></div>
+    </section>
+    <section class="settings-section" id="themesPanel">
+      <h2 data-i18n="themesHeading">🎨 Темы оформления</h2>
+      <div class="plugin-list" id="themeList"></div>
+    </section>
+    <section class="settings-section">
+      <h2 data-i18n="readingHeading">⏬ Чтение файлов</h2>
+      <div class="settings-card">
+        <p id="interpreterInfo">Интерпретатор не выбран</p>
+        <label><input id="progressive" type="checkbox" disabled> <span data-i18n="progressive">Прогрессивная загрузка</span></label>
+        <p id="loadingHint">Выберите SQLite-файл</p>
+      </div>
     </section>
     <footer class="sign"><a href="https://unit.link/vladaaar">@vladaaar, 2026</a></footer>
   </section>
   </main>
 </div>
 
-<div class="drop">Отпустите файл или папку — содержимое появится в просмотре</div>
+<div class="drop" data-i18n="drop">Отпустите файл или папку — содержимое появится в просмотре</div>
 <input type="file" id="pickFile" multiple hidden>
 <input type="file" id="pickModule" accept=".js,text/javascript" hidden>
 
 <script src="core/bouquet.js"></script>
+<script src="core/i18n.js"></script>
 <script src="core/sources.js"></script>
 <script src="core/files.js"></script>
 

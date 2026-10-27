@@ -26,7 +26,7 @@ Bouquet.register({
     const columns = [];
     for (let i = 0; i < width; i++) {
       const h = (header[i] || '').trim();
-      columns.push(h || 'колонка ' + (i + 1));
+      columns.push(h || Bouquet.i18n.t('data.column', { index: i + 1 }));
     }
     rows.forEach(r => { while (r.length < width) r.push(''); });
 
@@ -34,9 +34,9 @@ Bouquet.register({
       name,
       tables: [{
         name: name,
-        columns,
-        rows,
-        note: 'разделитель «' + (delim === '\t' ? 'tab' : delim) + '»'
+        columns, columnKeys: columns.map((_, i) => (header[i] || '').trim() ? null : 'data.column'),
+        rows, noteKey: 'delimiter', noteParams: { value: delim === '\t' ? 'tab' : delim },
+        get note() { return Bouquet.i18n.t('delimiter', { value: delim === '\t' ? 'tab' : delim }); }
       }]
     };
   }

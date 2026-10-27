@@ -19,14 +19,14 @@
     const U = Bouquet.util;
     const header = await source.read(0, 100, { signal });
     if (header.length < 100 || !Array.from(MAGIC).every((c, i) => header[i] === c.charCodeAt(0))) {
-      throw new Error('это не файл SQLite 3');
+      throw Bouquet.i18n.error('это не файл SQLite 3');
     }
     const hd = new DataView(header.buffer, header.byteOffset, header.byteLength);
     let pageSize = hd.getUint16(16);
     if (pageSize === 1) pageSize = 65536;
-    if (pageSize < 512 || pageSize > 65536 || (pageSize & (pageSize - 1))) throw new Error('неверный размер страницы');
+    if (pageSize < 512 || pageSize > 65536 || (pageSize & (pageSize - 1))) throw Bouquet.i18n.error('неверный размер страницы');
     const usable = pageSize - header[20];
-    if (usable < 480) throw new Error('неверный размер полезной страницы');
+    if (usable < 480) throw Bouquet.i18n.error('неверный размер полезной страницы');
     const enc = hd.getUint32(56) || 1;
     const decoder = new TextDecoder(enc === 2 ? 'utf-16le' : enc === 3 ? 'utf-16be' : 'utf-8');
     const cache = new Map();
@@ -34,16 +34,16 @@
     let closed = false;
     function check(signal) {
       U.checkAbort(signal);
-      if (closed) throw new DOMException('Источник закрыт', 'AbortError');
+      if (closed) throw new DOMException(Bouquet.i18n.t('Источник закрыт'), 'AbortError');
     }
     async function page(n, signal) {
       check(signal);
-      if (!Number.isInteger(n) || n < 1 || n * pageSize > source.size) throw new Error('страница за границей файла: ' + n);
+      if (!Number.isInteger(n) || n < 1 || n * pageSize > source.size) throw Bouquet.i18n.error('страница за границей файла: {page}', { page: n });
       let bytes = cache.get(n);
       if (bytes) cache.delete(n);
       else bytes = await source.read((n - 1) * pageSize, pageSize, { signal });
       check(signal);
-      if (bytes.length !== pageSize) throw new Error('неполная страница: ' + n);
+      if (bytes.length !== pageSize) throw Bouquet.i18n.error('неполная страница: {page}', { page: n });
       cache.set(n, bytes);
       if (cache.size > maxPages) cache.delete(cache.keys().next().value);
       return bytes;
@@ -51,7 +51,7 @@
     const uint32 = (p, offset) => new DataView(p.buffer, p.byteOffset, p.byteLength).getUint32(offset);
     async function payload(p, start, len, tableLeaf, signal) {
       // A single giant value must not defeat the bounded page cache.
-      if (!Number.isSafeInteger(len) || len < 0 || len > 64 * 1024 * 1024) throw new Error('запись превышает лимит 64 МиБ');
+      if (!Number.isSafeInteger(len) || len < 0 || len > 64 * 1024 * 1024) throw Bouquet.i18n.error('запись превышает лимит 64 МиБ');
       const maxLocal = tableLeaf ? usable - 35 : ((usable - 12) * 64 / 255 | 0) - 23;
       const minLocal = ((usable - 12) * 32 / 255 | 0) - 23;
       let local = len;
@@ -59,14 +59,14 @@
         local = minLocal + ((len - minLocal) % (usable - 4));
         if (local > maxLocal) local = minLocal;
       }
-      if (start + local + (local < len ? 4 : 0) > usable) throw new Error('повреждённая ячейка');
+      if (start + local + (local < len ? 4 : 0) > usable) throw Bouquet.i18n.error('повреждённая ячейка');
       if (local === len) return p.subarray(start, start + len);
       const out = new Uint8Array(len);
       out.set(p.subarray(start, start + local));
       let filled = local, next = uint32(p, start + local);
       const seen = new Set();
       while (filled < len) {
-        if (!next || seen.has(next)) throw new Error('повреждённая цепочка переполнения');
+        if (!next || seen.has(next)) throw Bouquet.i18n.error('повреждённая цепочка переполнения');
         seen.add(next);
         const overflow = await page(next, signal);
         const take = Math.min(usable - 4, len - filled);
@@ -80,12 +80,12 @@
     function varint(p, o) {
       let v = 0n;
       for (let i = 0; i < 8; i++) {
-        if (o + i >= p.length) throw new Error('неполный varint');
+        if (o + i >= p.length) throw Bouquet.i18n.error('неполный varint');
         const byte = p[o + i];
         if (byte & 0x80) v = (v << 7n) | BigInt(byte & 0x7f);
         else return [(v << 7n) | BigInt(byte), i + 1];
       }
-      if (o + 8 >= p.length) throw new Error('неполный varint');
+      if (o + 8 >= p.length) throw Bouquet.i18n.error('неполный varint');
       return [(v << 8n) | BigInt(p[o + 8]), 9];
     }
 
@@ -101,7 +101,7 @@
     function record(p) {
       const [hsize, n] = varint(p, 0);
       const hs = Number(hsize);
-      if (hs < n || hs > p.length) throw new Error('повреждённый заголовок записи');
+      if (hs < n || hs > p.length) throw Bouquet.i18n.error('повреждённый заголовок записи');
       let ho = n, bo = hs;
       const vals = [];
       const SIZE = [0, 1, 2, 3, 4, 6, 8];
@@ -114,10 +114,10 @@
         else if (t === 7) { v = new DataView(p.buffer, p.byteOffset + bo, 8).getFloat64(0); bo += 8; }
         else if (t === 8) v = 0;
         else if (t === 9) v = 1;
-        else if (t === 10 || t === 11) throw new Error('зарезервированный тип записи');
+        else if (t === 10 || t === 11) throw Bouquet.i18n.error('зарезервированный тип записи');
         else if (t >= 12 && t % 2 === 0) { const l = (t - 12) / 2; v = '‹blob ' + l + ' Б›'; bo += l; }
         else { const l = (t - 13) / 2; v = decoder.decode(p.subarray(bo, bo + l)); bo += l; }
-        if (ho > hs || bo > p.length) throw new Error('неполная запись');
+        if (ho > hs || bo > p.length) throw Bouquet.i18n.error('неполная запись');
         vals.push(v);
       }
       return vals;
@@ -134,12 +134,12 @@
         const p = await page(frame.page, signal);
         const h = frame.page === 1 ? 100 : 0;
         const type = p[h];
-        if (![2, 5, 10, 13].includes(type)) throw new Error('неподдерживаемая страница b-дерева: ' + type);
+        if (![2, 5, 10, 13].includes(type)) throw Bouquet.i18n.error('неподдерживаемая страница b-дерева: {type}', { type });
         const dv = new DataView(p.buffer, p.byteOffset, p.byteLength);
         const cells = dv.getUint16(h + 3);
         const interior = type === 2 || type === 5;
         const ptrs = h + (interior ? 12 : 8);
-        if (ptrs + cells * 2 > usable) throw new Error('повреждённый список ячеек');
+        if (ptrs + cells * 2 > usable) throw Bouquet.i18n.error('повреждённый список ячеек');
         const steps = interior ? cells * 2 + 1 : cells;
         if (frame.step >= steps) { c.stack.pop(); continue; }
         const step = frame.step++;
@@ -147,7 +147,7 @@
         const cell = i < cells ? dv.getUint16(ptrs + i * 2) : 0;
         if (interior && step % 2 === 0) {
           const child = i === cells ? dv.getUint32(h + 8) : dv.getUint32(cell);
-          if (c.stack.length >= 64 || c.stack.some(f => f.page === child)) throw new Error('повреждённое b-дерево');
+          if (c.stack.length >= 64 || c.stack.some(f => f.page === child)) throw Bouquet.i18n.error('повреждённое b-дерево');
           c.stack.push({ page: child, step: 0 });
           continue;
         }
@@ -178,9 +178,9 @@
     const tables = master.filter(m => m.type === 'table' && m.root && !/^sqlite_/.test(m.name)).map(m => {
       const spec = columnsOf(m.sql);
       const table = {
-        name: m.name, columns: spec.names, schemaSQL: m.sql, note: source.note,
+        name: m.name, columns: spec.names, schemaSQL: m.sql, note: source.note, noteKey: source.noteKey,
         async read({ cursor: token = null, limit = 100, match, signal, onProgress } = {}) {
-          if (!Number.isInteger(limit) || limit < 1 || limit > 10000) throw new Error('размер порции должен быть от 1 до 10000');
+          if (!Number.isInteger(limit) || limit < 1 || limit > 10000) throw Bouquet.i18n.error('размер порции должен быть от 1 до 10000');
           const c = token ? copy(token) : cursor(m.root);
           const rows = [];
           let scanned = 0;

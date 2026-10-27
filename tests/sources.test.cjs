@@ -3,7 +3,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
-global.Bouquet = { util: {} };
+global.window = global;
+for (const file of ['bouquet', 'i18n']) vm.runInThisContext(fs.readFileSync(path.join(__dirname, '../core/' + file + '.js'), 'utf8'));
 vm.runInThisContext(fs.readFileSync(path.join(__dirname, '../core/sources.js'), 'utf8'));
 const U = Bouquet.util;
 test('Blob source reads only the requested slice and honours cancellation', async () => {

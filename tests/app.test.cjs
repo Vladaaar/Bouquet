@@ -30,7 +30,7 @@ function setup({ fetch = async () => ({ ok: false }), withSearch = true } = {}) 
   const context = vm.createContext({ console, Blob, TextDecoder, TextEncoder, Uint8Array, ArrayBuffer, DataView, DOMException, AbortController, setTimeout, clearTimeout,
     document: { body, head: new Element(), querySelector: () => el('bar'), getElementById: el, createElement: () => new Element() }, addEventListener() {}, scrollTo() {}, fetch });
   context.window = context;
-  for (const f of ['core/bouquet.js', 'core/sources.js', 'core/files.js', ...(withSearch ? ['modules/search.js'] : [])]) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), context);
+  for (const f of ['core/bouquet.js', 'core/i18n.js', 'core/sources.js', 'core/files.js', ...(withSearch ? ['modules/search.js'] : [])]) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), context);
   const views = [];
   context.Bouquet.register({ kind: 'renderer', id: 'capture', priority: 100, test: () => true, render: (_, view) => views.push(view) });
   for (const f of ['modules/themes.js', 'core/ui.js', 'core/app.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), context);
@@ -178,7 +178,9 @@ test('plugins extend the live interface and theme loading preserves the current 
   await until(() => B.plugins.some(p => p.id === 'custom-theme'));
   ui.setTheme('custom-theme');
   assert.equal(ui.theme, 'custom-theme');
-  assert.equal(el('themeSelect').value, 'custom-theme');
+  const themeCard = el('themeList').children.find(card => card.dataset.plugin === 'custom-theme');
+  assert.equal(themeCard.children[2].disabled, true);
+  assert.equal(el('pluginList').children.some(card => card.dataset.plugin === 'custom-theme'), false);
   assert.equal(views.length, count);
   assert.equal(ui.activeTab, 'extra');
   assert.throws(() => B.register({ kind: 'plugin', id: 'extra' }), /уже подключён/);
@@ -383,4 +385,99 @@ test('multiple picked files create a path whose parents navigate and current ele
   crumbs(el)[0].click();
   assert.equal(pathLabel(el), 'Выбранные файлы');
   assert.equal(el('searchForm').hidden, true);
+});
+
+test('language cards preserve data, pagination, query, scroll and renderer DOM', async () => {
+  const { el, context, views, choose, submit } = setup();
+  const B = context.Bouquet, ui = B.ui;
+  B.register({ kind: 'interpreter', id: 'language-rows', priority: 100, test: () => true,
+    parse: () => ({ tables: [{ name: 'Original table', columns: ['Оригинальная колонка'],
+      rows: Array.from({ length: 220 }, (_, n) => ['match ' + n]) }] }) });
+  choose('Оригинальный файл.txt'); await until(() => views.length);
+  el('q').value = 'match'; submit(); await until(() => views.at(-1).query === 'match');
+  el('next').click(); await until(() => views.at(-1).page === 1);
+  el('stage').scrollTop = 80;
+  const view = views.at(-1), count = views.length;
+  ui.selectTab('settings');
+  const english = el('languageList').children.find(card => card.dataset.plugin === 'language-en');
+  english.children[2].click();
+  assert.equal(ui.language, 'language-en');
+  assert.equal(pathLabel(el), 'Settings');
+  assert.match(el('dataSummary').textContent, /220 rows.*220 found/);
+  assert.equal(views.length, count);
+  assert.equal(views.at(-1), view);
+  assert.equal(view.table.columns[0], 'Оригинальная колонка');
+  assert.equal(el('stage').scrollTop, 80);
+  assert.equal(el('q').value, 'match');
+  assert.equal(el('pos').textContent, '2 / 3');
+  el('closeSettings').click();
+  assert.equal(pathLabel(el), 'Оригинальный файл.txt');
+  ui.setLanguage('language-ru');
+  assert.match(el('dataSummary').textContent, /220 строк.*найдено 220/);
+  assert.equal(views.length, count);
+  assert.equal(el('languageList').children.length, 2);
+  assert.equal(el('themeList').children.length, 3);
+  assert.equal(el('pluginList').children.some(card => ['language', 'theme'].includes(B.plugins.find(plugin => plugin.id === card.dataset.plugin)?.category)), false);
+});
+
+test('language changes during an asynchronous read keep the same request and localize the result', async () => {
+  const { el, context, views, choose } = setup();
+  let release, signal, calls = 0;
+  context.Bouquet.register({ kind: 'interpreter', id: 'language-pending', priority: 100, test: () => true,
+    open: () => ({ tables: [{ name: 'pending', columns: ['value'], async read(args) {
+      calls++; signal = args.signal; args.onProgress({ scanned: 128, found: 0 });
+      await new Promise(resolve => { release = resolve; });
+      return { rows: [{ n: 1, cells: ['kept'] }], total: 1, hasMore: false };
+    } }] }) });
+  choose(); await until(() => release);
+  context.Bouquet.ui.setLanguage('language-en');
+  assert.equal(signal.aborted, false);
+  assert.equal(calls, 1);
+  release(); await until(() => views.length);
+  assert.equal(el('dataSummary').textContent, '1 row · 1 col.');
+  assert.equal(views[0].rows[0].cells[0], 'kept');
+});
+
+test('external language packages load as plugins, use English fallback, and do not reread data', async () => {
+  const { el, context, views, choose } = setup();
+  const B = context.Bouquet;
+  choose('file.txt'); await until(() => views.length);
+  const count = views.length;
+  const file = { name: 'fr.js', text: async () => `Bouquet.register({kind:'plugin',category:'language',id:'language-fr',name:'Français',locale:'fr',messages:{settings:'Paramètres',open:'Ouvrir',rows:{one:'{count} ligne',other:'{count} lignes'}}})` };
+  el('pickModule').onchange({ target: { files: [file], value: file.name } });
+  await until(() => B.plugins.some(p => p.id === 'language-fr'));
+  B.ui.selectTab('settings');
+  el('languageList').children.find(card => card.dataset.plugin === 'language-fr').children[2].click();
+  assert.equal(pathLabel(el), 'Paramètres');
+  assert.equal(B.i18n.t('open'), 'Ouvrir');
+  assert.equal(B.i18n.t('search'), 'Search in file');
+  assert.equal(B.i18n.t('rows', { count: 2 }), '2 lignes');
+  assert.equal(views.length, count);
+  assert.throws(() => B.ui.setLanguage('missing-language'), /Language is not loaded/);
+  assert.equal(B.ui.language, 'language-fr');
+});
+
+test('built-in translation dictionaries cover the same keys and support Russian and English plurals', () => {
+  const { context } = setup();
+  const B = context.Bouquet, I = B.i18n;
+  const languages = B.plugins.filter(plugin => plugin.category === 'language');
+  assert.deepEqual(Object.keys(languages[0].messages).sort(), Object.keys(languages[1].messages).sort());
+  assert.equal(I.t('rows', { count: 1 }), '1 строка');
+  assert.equal(I.t('rows', { count: 2 }), '2 строки');
+  assert.equal(I.t('rows', { count: 5 }), '5 строк');
+  assert.equal(I.t('rows', { count: 21 }), '21 строка');
+  I.setLanguage('language-en');
+  assert.equal(I.t('rows', { count: 1 }), '1 row');
+  assert.equal(I.t('rows', { count: 5 }), '5 rows');
+  assert.equal(I.errorText(I.error('это не файл SQLite 3')), 'This is not a SQLite 3 file');
+});
+
+test('invalid language plugins are rejected before registration and leave the active language unchanged', () => {
+  const { context } = setup();
+  const B = context.Bouquet, before = B.plugins.length;
+  for (const values of [{ locale: 'invalid_tag', messages: {} }, { locale: 'fr' }, { locale: 'fr', messages: [] }]) {
+    assert.throws(() => B.register({ kind: 'plugin', category: 'language', id: 'invalid-language', ...values }), /Языковому пакету/);
+    assert.equal(B.plugins.length, before);
+    assert.equal(B.ui.language, 'language-ru');
+  }
 });

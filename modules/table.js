@@ -21,7 +21,7 @@
   Bouquet.register({
     kind: 'renderer',
     id: 'table',
-    name: 'Таблица',
+    name: 'Таблица', nameKey: 'plugin.table',
     priority: 10,
     test(table) { return !table.plain && Array.isArray(table.columns); },
 
@@ -38,13 +38,17 @@
       wrap.className = 'bq-wrap';
 
       if (!view.rows.length) {
-        wrap.innerHTML = '<div class="bq-empty">Ничего не нашлось. Попробуйте короче или очистите поиск.</div>';
+        wrap.innerHTML = '<div class="bq-empty" data-i18n="tableEmpty">' + Bouquet.util.escape(Bouquet.i18n.t('tableEmpty')) + '</div>';
         host.replaceChildren(wrap);
         return;
       }
 
       const head = '<tr><th class="bq-num">#</th>' +
-        t.columns.map(c => '<th>' + Bouquet.util.escape(c) + '</th>').join('') + '</tr>';
+        t.columns.map((c, i) => {
+          const key = t.columnKeys?.[i];
+          const attrs = key ? ' data-i18n="' + Bouquet.util.escape(key) + '" data-i18n-params="' + Bouquet.util.escape(JSON.stringify({ index: i + 1 })) + '"' : '';
+          return '<th' + attrs + '>' + Bouquet.util.escape(key ? Bouquet.i18n.t(key, { index: i + 1 }) : c) + '</th>';
+        }).join('') + '</tr>';
 
       const body = view.rows.map(r =>
         '<tr><td class="bq-num">' + r.n + '</td>' +

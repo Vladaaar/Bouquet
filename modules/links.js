@@ -1,6 +1,6 @@
 /* Bouquet · declared SQLite relationships, independently paginated in a drawer. */
 (function () {
-  const B = Bouquet, cache = new WeakMap();
+  const B = Bouquet, I = B.i18n, cache = new WeakMap();
   const lower = value => String(value).toLowerCase();
   // Tokenize instead of matching SQL inside string literals, comments or identifiers.
   function tokens(sql) {
@@ -150,7 +150,7 @@
     return { rows, hasMore: false, nextCursor: null };
   }
 
-  B.register({ kind: 'plugin', id: 'links', name: 'Связи таблиц', schema, relations, neighbors, read,
+  B.register({ kind: 'plugin', id: 'links', name: 'Связи таблиц', nameKey: 'plugin.links', schema, relations, neighbors, read,
     setup(ui) {
       const doc = ui.document;
       const style = doc.createElement('style');
@@ -201,24 +201,25 @@
         drawer.replaceChildren();
         const header = element('header', null, 'bq-links-header');
         const title = element('h2', table.name + ' · ' + table.columns[column]); title.id = 'bq-links-title';
-        const dismiss = element('button', '×', 'bq-links-close'); dismiss.setAttribute('aria-label', 'Закрыть связи');
+        const dismiss = element('button', '×', 'bq-links-close'); dismiss.setAttribute('aria-label', I.t('links.close')); dismiss.setAttribute('data-i18n-aria-label', 'links.close');
         dismiss.onclick = close; header.append(title, dismiss); drawer.appendChild(header);
         for (const link of links) {
           const section = element('section', null, 'bq-links-group');
           section.appendChild(element('h3', link.table.name));
-          section.appendChild(element('p', (link.reverse ? 'Ссылается на эту запись: ' : 'Связанная запись: ') +
-            link.columns.map((c, i) => link.table.columns[c] + ' = ' + link.values[i]).join(', ')));
-          const status = element('p', 'Поиск связанных записей…'); status.setAttribute('role', 'status');
+          const relation = element('p'); I.bind(relation, link.reverse ? 'links.reverse' : 'links.forward', {
+            fields: link.columns.map((c, i) => link.table.columns[c] + ' = ' + link.values[i]).join(', ') });
+          section.appendChild(relation);
+          const status = element('p'); I.bind(status, 'links.searching'); status.setAttribute('role', 'status');
           const records = element('div');
-          const more = element('button', 'Следующие 50', 'bq-links-more'); more.hidden = true;
+          const more = element('button', null, 'bq-links-more'); I.bind(more, 'links.next'); more.hidden = true;
           section.append(status, records, more); drawer.appendChild(section);
           let cursor = null, page = 0;
           async function load() {
-            more.disabled = true; status.textContent = 'Поиск связанных записей…';
+            more.disabled = true; I.bind(status, 'links.searching');
             section.setAttribute('aria-busy', 'true');
             try {
               const result = await read(link, { cursor, signal: request.signal, onProgress({ scanned }) {
-                if (!request.signal.aborted) status.textContent = 'Просмотрено строк: ' + scanned;
+                if (!request.signal.aborted) I.bind(status, 'links.progress', { count: scanned });
               } });
               B.util.checkAbort(request.signal);
               records.replaceChildren();
@@ -227,10 +228,10 @@
                 link.table.columns.forEach((name, i) => record.append(element('dt', name), element('dd', row.cells[i] == null ? 'NULL' : String(row.cells[i]))));
                 records.appendChild(record);
               }
-              status.textContent = result.rows.length ? `Порция ${++page} · записей: ${result.rows.length}` : 'Связанные записи не найдены';
+              I.bind(status, result.rows.length ? 'links.page' : 'links.empty', { page: ++page, count: result.rows.length });
               cursor = result.nextCursor; more.hidden = !result.hasMore;
             } catch (error) {
-              if (!request.signal.aborted) { status.textContent = 'Не удалось прочитать связи: ' + error.message; more.hidden = true; }
+              if (!request.signal.aborted) { I.bind(status, 'links.failed', { error: () => I.errorText(error) }); more.hidden = true; }
             } finally { if (!request.signal.aborted) { more.disabled = false; section.removeAttribute('aria-busy'); } }
           }
           more.onclick = load; load();
@@ -248,7 +249,10 @@
           if (!links.length) continue;
           const button = element('button', '🔗', 'bq-link');
           button.type = 'button';
-          button.title = 'Связи: ' + [...new Set(links.map(link => link.table.name))].join(', ');
+          button.i18nParams = { names: [...new Set(links.map(link => link.table.name))].join(', ') };
+          button.title = I.t('links.title', button.i18nParams);
+          button.setAttribute('data-i18n-title', 'links.title');
+          button.setAttribute('data-i18n-aria-label', 'links.title');
           button.setAttribute('aria-label', button.title);
           button.setAttribute('aria-haspopup', 'dialog');
           button.onclick = event => { event.stopPropagation(); show(links, view.table, column, button); };

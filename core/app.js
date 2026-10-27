@@ -1,6 +1,6 @@
 /* Bouquet UI: accepts both in-memory tables and asynchronous row sources. */
 (function () {
-  const B = window.Bouquet, U = B.util;
+  const B = window.Bouquet, U = B.util, I = B.i18n;
   const $ = id => document.getElementById(id);
   const fileState = $('fileState');
   const form = $('searchForm'), q = $('q'), clear = $('clear');
@@ -14,6 +14,12 @@
   const MEMORY_LIMIT = 100 * 1024 * 1024;
   let opening, reading, debounce, selectionVersion = 0;
   const search = () => B.features.search;
+  const setStatus = (key, params) => I.bind(status, key, params);
+  function sourceStatus() {
+    if (S.error) setStatus('openFailed', { error: () => I.errorText(S.error) });
+    else if (S.source?.noteKey) setStatus(S.source.noteKey);
+    else { setStatus(null); status.textContent = S.source?.note || ''; }
+  }
   function resetPages() { S.page = 0; S.cursors = [null]; S.total = undefined; S.matches = undefined; }
   const choose = (list, value) => list.filter(m => {
     try { return m.test(value); } catch { return false; }
@@ -26,11 +32,11 @@
     B.ui.currentView = null; B.emit('view:reset');
     S.dataset?.close?.();
     Object.assign(S, { fileName: name, source: null, dataset: null, interp: null, bytes: null,
-      opening: true, reading: false, query: preserve ? S.query : '', active: 0, error: '', loadingMode: mode || null, location: 'data' });
+      opening: true, reading: false, query: preserve ? S.query : '', active: 0, error: '', loadingMode: mode || null, readError: null, location: 'data' });
     resetPages(); if (!preserve) q.value = ''; clear.hidden = !q.value;
-    stage.replaceChildren(); summary.textContent = ''; pager.hidden = true;
+    stage.replaceChildren(); I.bind(summary, null); pager.hidden = true;
     $('emptyState').hidden = true; $('fileContent').hidden = false;
-    status.textContent = 'Открытие файла…'; paintFileState(); paintNavigation();
+    setStatus('opening'); paintFileState(); paintNavigation();
     try {
       const source = await load(request.signal);
       U.checkAbort(request.signal);
@@ -49,7 +55,7 @@
       let result;
       if (interpreter.open) result = await interpreter.open(meta);
       else {
-        status.textContent = 'Чтение файла целиком…';
+        setStatus('fullReading');
         const full = await source.read(0, source.size, { signal: request.signal });
         U.checkAbort(request.signal);
         await new Promise(resolve => setTimeout(resolve, 0));
@@ -59,15 +65,15 @@
       }
       if (request.signal.aborted) { result?.close?.(); return; }
       S.dataset = U.normalize(result, name);
-      if (!S.dataset.tables.length) S.dataset.tables = [U.textTable('В файле нет таблиц для показа', 'пусто')];
+      if (!S.dataset.tables.length) S.dataset.tables = [U.messageTable('noTables', {}, 'empty')];
       S.active = tableName ? S.dataset.tables.findIndex(t => t.name === tableName) : S.dataset.tables.length === 1 ? 0 : -1;
       S.location = S.active < 0 ? 'tables' : 'data';
-      status.textContent = source.note || '';
+      sourceStatus();
     } catch (err) {
       if (request.signal.aborted) return;
-      S.dataset = { name, tables: [U.textTable('Файл не разобран: ' + err.message, 'ошибка')] };
-      S.error = 'Не удалось открыть файл: ' + err.message;
-      status.textContent = S.error;
+      S.dataset = { name, tables: [U.messageTable('parseFailed', { error: () => I.errorText(err) }, 'error')] };
+      S.error = err;
+      sourceStatus();
     } finally {
       if (opening === request) {
         S.opening = false;
@@ -88,10 +94,10 @@
     B.ui.currentView = null; B.emit('view:reset');
     stage.removeAttribute('aria-busy'); pager.hidden = true;
   }
-  function showCollection(name, entries, error = '', autoOpen = true) {
+  function showCollection(name, entries, error = '', autoOpen = true, nameKey = null) {
     cancelContent(); S.dataset?.close?.();
-    Object.assign(S, { collection: { name, entries }, fileName: null, source: null,
-      dataset: null, interp: null, bytes: null, active: -1, query: '', error, loadingMode: null, location: 'files' });
+    Object.assign(S, { collection: { name, entries, nameKey }, fileName: null, source: null,
+      dataset: null, interp: null, bytes: null, active: -1, query: '', error, loadingMode: null, readError: null, location: 'files' });
     q.value = ''; clear.hidden = true; resetPages();
     B.ui.selectTab('explorer');
     if (autoOpen && entries.length === 1 && !error) return openEntry(entries[0]);
@@ -106,8 +112,9 @@
     selectionVersion++;
     if (!folder && files.length === 1) return openFile(files[0]);
     const entries = U.fileEntries(files);
-    const name = folder ? files[0]?.webkitRelativePath?.split('/')[0] || 'Папка' : 'Выбранные файлы';
-    return showCollection(name, entries);
+    const folderName = files[0]?.webkitRelativePath?.split('/')[0];
+    const nameKey = folder ? folderName ? null : 'folder' : 'selectedFiles';
+    return showCollection(folderName || I.t(nameKey), entries, '', true, nameKey);
   }
   function selectTable(active) {
     if (!S.dataset?.tables[active]) return;
@@ -118,7 +125,7 @@
     if (level === 'tables' && S.dataset) {
       S.location = 'tables'; S.active = -1; paint();
     } else if (level === 'files' && S.collection) {
-      showCollection(S.collection.name, S.collection.entries, '', false);
+      showCollection(S.collection.name, S.collection.entries, '', false, S.collection.nameKey);
     }
   }
   function paintHeader() {
@@ -131,14 +138,14 @@
     if (!explorer) {
       crumbs.push({ label: B.ui.activeLabel });
     } else {
-      if (S.collection) crumbs.push({ label: S.collection.name, level: S.location !== 'files' ? 'files' : null });
+      if (S.collection) crumbs.push({ label: S.collection.nameKey ? I.t(S.collection.nameKey) : S.collection.name, level: S.location !== 'files' ? 'files' : null });
       if (S.fileName) {
         const prefix = S.collection?.name + '/';
         const name = S.fileName.startsWith(prefix) ? S.fileName.slice(prefix.length) : S.fileName;
         crumbs.push({ label: name, level: S.location === 'data' && S.dataset?.tables.length > 1 ? 'tables' : null });
       }
       if (S.location === 'data' && S.dataset?.tables.length > 1) {
-        crumbs.push({ label: S.dataset.tables[S.active]?.name || '' });
+        crumbs.push({ label: I.label(S.dataset.tables[S.active]) });
       }
     }
     $('breadcrumbs').hidden = !crumbs.length;
@@ -163,25 +170,27 @@
     form.hidden = !search() || S.location !== 'data' || !table;
   }
   function paintList() {
-    B.ui.currentView = null; stage.replaceChildren(); summary.textContent = ''; pager.hidden = true;
+    B.ui.currentView = null; stage.replaceChildren(); I.bind(summary, null); pager.hidden = true;
     const files = S.location === 'files';
     const entries = files ? S.collection.entries : S.dataset.tables;
     const list = document.createElement('div'); list.className = 'entity-browser';
-    const title = document.createElement('h1'); title.textContent = files ? 'Выберите файл' : 'Выберите таблицу';
+    const title = document.createElement('h1'); I.bind(title, files ? 'files' : 'tables');
     list.appendChild(title);
     if (!entries.length) {
-      const note = document.createElement('p'); note.textContent = S.error || 'В папке нет файлов'; list.appendChild(note);
+      const note = document.createElement('p'); I.bind(note, S.error ? 'folderFailed' : 'emptyFolder', { error: () => I.errorText(S.error) }); list.appendChild(note);
     }
     const items = document.createElement('ul'); items.className = 'entity-list';
     entries.forEach((entry, i) => {
       const item = document.createElement('li');
       const button = document.createElement('button'); button.className = 'entity-button';
-      button.textContent = entry.name || 'Таблица ' + (i + 1);
+      if (entry.nameKey) I.bind(button, entry.nameKey);
+      else if (entry.name) button.textContent = entry.name;
+      else I.bind(button, 'table', { index: i + 1 });
       button.onclick = () => files ? openEntry(entry) : selectTable(i);
       item.appendChild(button); items.appendChild(item);
     });
     list.appendChild(items); stage.appendChild(list);
-    status.textContent = S.error || (files ? 'Файлов: ' : 'Таблиц: ') + entries.length;
+    setStatus(null);
   }
   async function loadModuleFile(file) {
     try {
@@ -194,27 +203,25 @@
       } else if (S.dataset && added.some(plugin => plugin.kind === 'renderer' || plugin.id === 'search')) {
         paint();
       }
-      $('pluginStatus').textContent = 'Подключён ' + file.name;
+      I.bind($('pluginStatus'), 'pluginLoaded', { name: file.name });
     } catch (err) {
-      $('pluginStatus').textContent = 'Плагин не подключён: ' + err.message;
+      I.bind($('pluginStatus'), 'pluginFailed', { error: () => I.errorText(err) });
       B.ui.selectTab('settings');
     }
   }
 
-  function renderView(view) {
-    const plural = n => {
-      const a = Math.abs(n) % 100, b = a % 10;
-      const word = a > 10 && a < 20 ? 'строк' : b === 1 ? 'строка' : b > 1 && b < 5 ? 'строки' : 'строк';
-      return n.toLocaleString('ru-RU') + ' ' + word;
-    };
+  function paintSummary(view) {
     summary.textContent = [
-      S.dataset.tables.length > 1 ? view.table.name : null,
-      view.total == null ? 'число строк пока неизвестно' : plural(view.total),
-      view.table.columns.length + ' кол.',
-      view.query.trim() ? 'найдено ' + (view.foundExact ? '' : 'не менее ') + view.found : null,
-      view.table.note
+      view.dataset.tables.length > 1 ? I.label(view.table) : null,
+      view.total == null ? I.t('unknownTotal') : I.t('rows', { count: view.total }),
+      I.t('columns', { count: view.table.columns.length }),
+      view.query.trim() ? I.t(view.foundExact ? 'found' : 'foundMinimum', { count: view.found }) : null,
+      view.table.noteKey ? I.t(view.table.noteKey, view.table.noteParams) : view.table.note
     ].filter(Boolean).join(' · ');
     summary.title = summary.textContent;
+  }
+  function renderView(view) {
+    paintSummary(view);
     choose(B.renderers, view.table).render(stage, view);
     B.ui.currentView = { host: stage, view };
     B.emit('view:render', B.ui.currentView);
@@ -234,7 +241,7 @@
       const result = await table.read({ cursor: S.cursors[S.page], limit: S.pageSize, match, signal,
         onProgress({ scanned, found, rows: partial }) {
           if (signal.aborted) return;
-          status.textContent = `Просмотрено ${scanned.toLocaleString('ru-RU')} строк; в порции найдено ${found}`;
+          setStatus('progress', { scanned, found });
           if (partial?.length && partial.length !== shown) {
             shown = partial.length;
             const view = { dataset: S.dataset, table, query, rows: partial, total: S.total,
@@ -284,10 +291,10 @@
     if (!S.dataset) { pager.hidden = true; return; }
     // Keep the current table in place until the new result is ready.
     const request = reading = new AbortController();
-    S.reading = true; paintFileState();
+    S.reading = true; S.readError = null; paintFileState();
     stage.setAttribute('aria-busy', 'true');
     $('prev').disabled = $('next').disabled = true;
-    status.textContent = S.query.trim() ? 'Поиск…' : 'Чтение строк…';
+    setStatus(S.query.trim() ? 'searching' : 'reading');
     try {
       const view = await currentView(request.signal);
       U.checkAbort(request.signal);
@@ -296,10 +303,10 @@
       pos.textContent = (view.page + 1) + (view.pages == null ? ' / …' : ' / ' + view.pages);
       $('prev').disabled = view.page === 0;
       $('next').disabled = !view.hasMore;
-      status.textContent = S.error || S.source?.note || '';
+      sourceStatus();
     } catch (err) {
       if (request.signal.aborted) return;
-      status.textContent = 'Ошибка чтения: ' + err.message;
+      S.readError = err; setStatus('readFailed', { error: () => I.errorText(err) });
       stage.replaceChildren();
       pager.hidden = S.page === 0;
       $('prev').disabled = S.page === 0;
@@ -315,16 +322,16 @@
     openSource(() => source, S.fileName, { preserve: true, mode: progressive.checked ? 'progressive' : 'memory' });
   };
   function paintFileState() {
-    $('interpreterInfo').textContent = S.interp ? 'Интерпретатор: ' + S.interp.name : 'Интерпретатор не выбран';
+    fileState.hidden = S.location !== 'data';
+    I.bind($('interpreterInfo'), S.interp ? 'interpreter' : 'noInterpreter', { name: () => I.label(S.interp) });
     progressive.checked = S.loadingMode === 'progressive';
     const alternatives = B.interpreters.filter(m => m.format === S.interp?.format && m.loadingMode);
     progressive.disabled = S.opening || !alternatives.some(m => m.loadingMode === 'memory') || !alternatives.some(m => m.loadingMode === 'progressive');
-    $('loadingHint').textContent = !S.interp?.loadingMode ? 'Выберите SQLite-файл' :
-      'По умолчанию: до 100 МиБ — целиком в память, больше — прогрессивно. Смена режима переоткрывает файл.';
+    I.bind($('loadingHint'), !S.interp?.loadingMode ? 'chooseSQLite' : 'modeHint');
     const busy = S.opening || S.reading;
     const ready = S.interp && (!S.interp.fallback || U.isText(S.bytes || new Uint8Array()));
-    fileState.dataset.state = busy ? 'loading' : S.error || (!S.fileName && !S.collection) ? 'stop' : S.location === 'files' ? 'go' : ready ? 'go' : 'wait';
-    fileState.title = busy ? 'Чтение данных' : S.error || (S.location === 'files' ? 'Папка открыта' : ready ? 'Файл и интерпретатор готовы' : 'Формат файла не распознан');
+    fileState.dataset.state = busy ? 'loading' : S.error || S.readError || (!S.fileName && !S.collection) ? 'stop' : S.location === 'files' ? 'go' : ready ? 'go' : 'wait';
+    fileState.title = busy ? I.t('readingData') : S.error || S.readError ? I.errorText(S.error || S.readError) : I.t(S.location === 'files' ? 'folderReady' : ready ? 'ready' : 'unknownFormat');
     fileState.setAttribute('aria-label', fileState.title);
   }
   $('openFile').onclick = () => $('pickFile').click();
@@ -371,14 +378,18 @@
       const entries = await U.dropEntries(items);
       if (version !== selectionVersion) return;
       if (items.length === 1 && !items[0].entry?.isDirectory && entries.length === 1) return openFile(entries[0].file);
-      const name = items.length === 1 && items[0].entry?.isDirectory ? items[0].entry.name : 'Выбранные файлы';
-      showCollection(name, entries);
+      const folder = items.length === 1 && items[0].entry?.isDirectory;
+      showCollection(folder ? items[0].entry.name : I.t('selectedFiles'), entries, '', true, folder ? null : 'selectedFiles');
     } catch (error) {
-      if (version === selectionVersion) showCollection('Папка', [], 'Не удалось прочитать папку: ' + error.message);
+      if (version === selectionVersion) showCollection(I.t('folder'), [], error, false, 'folder');
     }
   });
   B.on('register', () => { paintNavigation(); paintFileState(); });
   B.on('tab:change', paintHeader);
+  B.on('language:change', () => {
+    paintHeader(); paintFileState();
+    if (B.ui.currentView) paintSummary(B.ui.currentView.view);
+  });
   async function scanFolder() {
     const version = selectionVersion;
     try {
@@ -394,8 +405,8 @@
       }
       if (version !== selectionVersion || !entries.length) return;
       const directory = entries[0].name.includes('/') ? entries[0].name.split('/').slice(0, -1).join('/') : '';
-      const name = directory && entries.every(entry => entry.name.startsWith(directory + '/')) ? directory : 'Файлы проекта';
-      showCollection(name, entries);
+      const common = directory && entries.every(entry => entry.name.startsWith(directory + '/'));
+      showCollection(common ? directory : I.t('projectFiles'), entries, '', true, common ? null : 'projectFiles');
     } catch { /* file://: manual file and folder selection remains available */ }
   }
   $('uploadFile').onclick = () => $('pickFile').click();

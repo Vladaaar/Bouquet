@@ -27,7 +27,7 @@
     const b = new Uint8Array(buffer);
     const dv = new DataView(buffer);
     for (let i = 0; i < 16; i++) {
-      if (b[i] !== MAGIC.charCodeAt(i)) throw new Error('это не файл SQLite 3');
+      if (b[i] !== MAGIC.charCodeAt(i)) throw Bouquet.i18n.error('это не файл SQLite 3');
     }
     let pageSize = dv.getUint16(16);
     if (pageSize === 1) pageSize = 65536;
@@ -37,7 +37,7 @@
 
     const pageOffset = n => {
       const off = (n - 1) * pageSize;
-      if (n < 1 || off + 1 > b.length) throw new Error('страница ' + n + ' за границей файла');
+      if (n < 1 || off + 1 > b.length) throw Bouquet.i18n.error('страница {page} за границей файла', { page: n });
       return off;
     };
 
@@ -162,7 +162,7 @@
       const data = rowsOf(m.root);
       const width = data.reduce((width, row) => Math.max(width, row.values.length), Math.max(spec.names.length, 1));
       const columns = [];
-      for (let i = 0; i < width; i++) columns.push(spec.names[i] || 'колонка ' + (i + 1));
+      for (let i = 0; i < width; i++) columns.push(spec.names[i] || Bouquet.i18n.t('data.column', { index: i + 1 }));
       tables.push({
         name: m.name, schemaSQL: m.sql,
         columns,
@@ -179,9 +179,7 @@
     if (!tables.length) {
       return {
         name,
-        tables: [Bouquet.util.textTable(
-          'В базе нет таблиц с данными.' + (views.length ? '\nПредставления (не читаются): ' + views.join(', ') : ''),
-          'пусто')]
+        tables: [Bouquet.util.messageTable('databaseNoTables', { views: () => views.length ? '\n' + Bouquet.i18n.t('viewsUnsupported', { names: views.join(', ') }) : '' }, 'empty')]
       };
     }
     return { name, tables };

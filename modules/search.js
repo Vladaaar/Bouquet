@@ -6,7 +6,7 @@
   Bouquet.register({
     kind: 'feature',
     id: 'search',
-    name: 'Поиск',
+    name: 'Поиск', nameKey: 'plugin.search',
 
     /* Compile once; usable with lazy sources without a whole-table cache. */
     compile(table, query) {

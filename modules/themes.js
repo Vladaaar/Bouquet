@@ -10,5 +10,5 @@
     ['theme-system', 'Системная', `:root{${light}}@media(prefers-color-scheme:dark){:root{${dark}}}`],
     ['theme-light', 'Светлая', `:root{${light}}`],
     ['theme-dark', 'Тёмная', `:root{${dark}}`]
-  ]) Bouquet.register({ kind: 'plugin', category: 'theme', id, name, css });
+  ]) Bouquet.register({ kind: 'plugin', category: 'theme', id, name, nameKey: 'theme.' + id.slice(6), css });
 })();

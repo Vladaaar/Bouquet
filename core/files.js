@@ -3,7 +3,7 @@
   const U = Bouquet.util;
   U.fileEntries = files => Array.from(files, file => ({
     name: file.webkitRelativePath || file.name, file
-  })).sort((a, b) => a.name.localeCompare(b.name, 'ru', { numeric: true }));
+  })).sort((a, b) => a.name.localeCompare(b.name, Bouquet.i18n.locale, { numeric: true }));
   U.dropEntries = async items => {
     const files = [];
     async function visit(entry, prefix = '') {
@@ -24,6 +24,6 @@
       if (item.entry) await visit(item.entry);
       else if (item.file) files.push({ name: item.file.name, file: item.file });
     }
-    return files.sort((a, b) => a.name.localeCompare(b.name, 'ru', { numeric: true }));
+    return files.sort((a, b) => a.name.localeCompare(b.name, Bouquet.i18n.locale, { numeric: true }));
   };
 })();

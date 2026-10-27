@@ -6,7 +6,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const { execFileSync } = require('node:child_process');
 global.window = global;
-for (const f of ['core/bouquet.js', 'core/sources.js', 'modules/sqlite.js', 'modules/sqlite_full_load.js', 'modules/search.js', 'modules/csv.js']) {
+for (const f of ['core/bouquet.js', 'core/i18n.js', 'core/sources.js', 'modules/sqlite.js', 'modules/sqlite_full_load.js', 'modules/search.js', 'modules/csv.js']) {
   vm.runInThisContext(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), { filename: f });
 }
 const sqlite = Bouquet.interpreters.find(m => m.id === 'sqlite');

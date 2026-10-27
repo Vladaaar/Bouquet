@@ -1,8 +1,8 @@
 /* Byte sources: local Blob/File, or HTTP Range with a full-download fallback. */
 (function () {
   const U = Bouquet.util;
-  U.checkAbort = signal => { if (signal?.aborted) throw new DOMException('Операция отменена', 'AbortError'); };
-  U.blobSource = (blob, name = blob.name || 'файл') => ({
+  U.checkAbort = signal => { if (signal?.aborted) throw new DOMException(Bouquet.i18n.t('Операция отменена'), 'AbortError'); };
+  U.blobSource = (blob, name = blob.name || Bouquet.i18n.t('файл')) => ({
     name, size: blob.size,
     async read(offset, length, { signal } = {}) {
       U.checkAbort(signal);
@@ -17,13 +17,14 @@
     if (!first.ok) throw new Error('HTTP ' + first.status);
     if (first.status !== 206) {
       const source = U.blobSource(await first.blob(), name);
-      source.note = 'Сервер не поддерживает Range: файл скачан целиком';
+      source.noteKey = 'rangeFallback';
+      Object.defineProperty(source, 'note', { get: () => Bouquet.i18n.t(source.noteKey) });
       return source;
     }
     const range = /^bytes 0-(\d+)\/(\d+)$/.exec(first.headers.get('Content-Range') || '');
-    if (!range) throw new Error('Некорректный Content-Range');
+    if (!range) throw Bouquet.i18n.error('Некорректный Content-Range');
     const initial = new Uint8Array(await first.arrayBuffer());
-    if (initial.length !== Number(range[1]) + 1) throw new Error('Неполный ответ Range');
+    if (initial.length !== Number(range[1]) + 1) throw Bouquet.i18n.error('Неполный ответ Range');
     const size = Number(range[2]);
     const validator = first.headers.get('ETag') || first.headers.get('Last-Modified');
     return {
@@ -37,10 +38,10 @@
         if (validator) headers['If-Range'] = validator;
         const response = await fetch(url, { headers, signal, cache: 'no-store' });
         if (response.status !== 206 || response.headers.get('Content-Range') !== `bytes ${offset}-${end - 1}/${size}`) {
-          throw new Error('Файл на сервере изменился или Range недоступен. Откройте файл заново.');
+          throw Bouquet.i18n.error('Файл на сервере изменился или Range недоступен. Откройте файл заново.');
         }
         const bytes = new Uint8Array(await response.arrayBuffer());
-        if (bytes.length !== end - offset) throw new Error('Неполный ответ Range');
+        if (bytes.length !== end - offset) throw Bouquet.i18n.error('Неполный ответ Range');
         return bytes;
       }
     };

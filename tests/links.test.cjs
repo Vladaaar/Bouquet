@@ -9,7 +9,7 @@ function setup() {
   const ctx = vm.createContext({ console, Blob, TextDecoder, TextEncoder, Uint8Array, ArrayBuffer, DataView,
     DOMException, AbortController, setTimeout, clearTimeout });
   ctx.window = ctx;
-  for (const file of ['core/bouquet.js', 'core/sources.js', 'modules/sqlite.js', 'modules/sqlite_full_load.js', 'modules/links.js']) {
+  for (const file of ['core/bouquet.js', 'core/i18n.js', 'core/sources.js', 'modules/sqlite.js', 'modules/sqlite_full_load.js', 'modules/links.js']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), ctx);
   }
   return ctx.Bouquet;
