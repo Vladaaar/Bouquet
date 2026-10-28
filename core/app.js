@@ -25,13 +25,13 @@
     try { return m.test(value); } catch { return false; }
   }).sort((a, b) => (b.priority || 0) - (a.priority || 0))[0];
 
-  async function openSource(load, name, { preserve = false, mode } = {}) {
+  async function openSource(load, name, { preserve = false, mode, label = preserve ? S.fileLabel : name } = {}) {
     const tableName = preserve ? S.dataset?.tables[S.active]?.name : null;
     opening?.abort(); reading?.abort(); clearTimeout(debounce);
     const request = opening = new AbortController();
     B.ui.currentView = null; B.emit('view:reset');
     S.dataset?.close?.();
-    Object.assign(S, { fileName: name, source: null, dataset: null, interp: null, bytes: null,
+    Object.assign(S, { fileName: name, fileLabel: label, source: null, dataset: null, interp: null, bytes: null,
       opening: true, reading: false, query: preserve ? S.query : '', active: 0, error: '', loadingMode: mode || null, readError: null, location: 'data' });
     resetPages(); if (!preserve) q.value = ''; clear.hidden = !q.value;
     stage.replaceChildren(); I.bind(summary, null); pager.hidden = true;
@@ -44,7 +44,9 @@
       const bytes = await source.read(0, 4096, { signal: request.signal });
       U.checkAbort(request.signal);
       S.bytes = bytes;
-      const meta = { source, name, ext: U.ext(name), bytes, signal: request.signal };
+      const files = (S.collection?.entries || []).map(entry => ({ name: entry.name, open: entry.load || (() => U.blobSource(entry.file)) }));
+      if (!files.some(file => file.name === name)) files.push({ name, open: () => source });
+      const meta = { source, name, files, ext: U.ext(name), bytes, signal: request.signal };
       const preferredMode = mode || (source.size > MEMORY_LIMIT ? 'progressive' : 'memory');
       let interpreter = choose(B.interpreters, meta);
       if (interpreter?.format && interpreter.loadingMode) {
@@ -71,7 +73,7 @@
       sourceStatus();
     } catch (err) {
       if (request.signal.aborted) return;
-      S.dataset = { name, tables: [U.messageTable('parseFailed', { error: () => I.errorText(err) }, 'error')] };
+      S.dataset = { name, tables: [{ ...U.messageTable('parseFailed', { error: () => I.errorText(err) }, 'error'), openFiles: !!err.missingFiles }] };
       S.error = err;
       sourceStatus();
     } finally {
@@ -96,16 +98,17 @@
   }
   function showCollection(name, entries, error = '', autoOpen = true, nameKey = null) {
     cancelContent(); S.dataset?.close?.();
-    Object.assign(S, { collection: { name, entries, nameKey }, fileName: null, source: null,
+    const items = U.groupFileEntries(entries);
+    Object.assign(S, { collection: { name, entries, items, nameKey }, fileName: null, source: null,
       dataset: null, interp: null, bytes: null, active: -1, query: '', error, loadingMode: null, readError: null, location: 'files' });
     q.value = ''; clear.hidden = true; resetPages();
     B.ui.selectTab('explorer');
-    if (autoOpen && entries.length === 1 && !error) return openEntry(entries[0]);
+    if (autoOpen && items.length === 1 && !error) return openEntry(items[0]);
     paint();
   }
   function openEntry(entry) {
     selectionVersion++;
-    return openSource(entry.load || (() => U.blobSource(entry.file)), entry.name);
+    return openSource(entry.load || (() => U.blobSource(entry.file)), entry.name, { label: entry.label || entry.name });
   }
   function openFiles(files, { folder = false } = {}) {
     if (!files.length && !folder) return;
@@ -138,10 +141,11 @@
     if (!explorer) {
       crumbs.push({ label: B.ui.activeLabel });
     } else {
-      if (S.collection) crumbs.push({ label: S.collection.nameKey ? I.t(S.collection.nameKey) : S.collection.name, level: S.location !== 'files' ? 'files' : null });
+      if (S.collection && (S.location === 'files' || S.fileLabel !== S.collection.name)) crumbs.push({ label: S.collection.nameKey ? I.t(S.collection.nameKey) : S.collection.name, level: S.location !== 'files' ? 'files' : null });
       if (S.fileName) {
         const prefix = S.collection?.name + '/';
-        const name = S.fileName.startsWith(prefix) ? S.fileName.slice(prefix.length) : S.fileName;
+        const label = S.fileLabel || S.fileName;
+        const name = label.startsWith(prefix) ? label.slice(prefix.length) : label;
         crumbs.push({ label: name, level: S.location === 'data' && S.dataset?.tables.length > 1 ? 'tables' : null });
       }
       if (S.location === 'data' && S.dataset?.tables.length > 1) {
@@ -172,7 +176,7 @@
   function paintList() {
     B.ui.currentView = null; stage.replaceChildren(); I.bind(summary, null); pager.hidden = true;
     const files = S.location === 'files';
-    const entries = files ? S.collection.entries : S.dataset.tables;
+    const entries = files ? S.collection.items : S.dataset.tables;
     const list = document.createElement('div'); list.className = 'entity-browser';
     const title = document.createElement('h1'); I.bind(title, files ? 'files' : 'tables');
     list.appendChild(title);
@@ -184,7 +188,7 @@
       const item = document.createElement('li');
       const button = document.createElement('button'); button.className = 'entity-button';
       if (entry.nameKey) I.bind(button, entry.nameKey);
-      else if (entry.name) button.textContent = entry.name;
+      else if (entry.name) button.textContent = entry.label || entry.name;
       else I.bind(button, 'table', { index: i + 1 });
       button.onclick = () => files ? openEntry(entry) : selectTable(i);
       item.appendChild(button); items.appendChild(item);
@@ -384,7 +388,12 @@
       if (version === selectionVersion) showCollection(I.t('folder'), [], error, false, 'folder');
     }
   });
-  B.on('register', () => { paintNavigation(); paintFileState(); });
+  B.on('register', plugin => {
+    paintNavigation(); paintFileState();
+    if (plugin.kind === 'interpreter' && plugin.groupFiles && S.collection && S.location === 'files') {
+      showCollection(S.collection.name, S.collection.entries, S.error, true, S.collection.nameKey);
+    }
+  });
   B.on('tab:change', paintHeader);
   B.on('language:change', () => {
     paintHeader(); paintFileState();
@@ -411,6 +420,6 @@
   }
   $('uploadFile').onclick = () => $('pickFile').click();
   $('addPlugin').onclick = () => $('pickModule').click();
-  B.ui.actions = { openFile, openFiles, refresh: paint };
+  B.ui.actions = { openFile, openFiles, chooseFiles: () => $('pickFile').click(), refresh: paint };
   form.hidden = !search(); paint(); B.ui.start(); scanFolder();
 })();

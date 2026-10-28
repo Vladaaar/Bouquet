@@ -4,7 +4,7 @@
 
 ![SQLite search](sqlite_search.png)
 
-A lightweight browser viewer for SQLite, Excel (XLS/XLSX), CSV, TSV, and plain text. Works offline, with no installation or build step. Your local files stay in your browser.
+A lightweight browser viewer for SQLite, CronosPro, Excel (XLS/XLSX), CSV, TSV, and plain text. Works offline, with no installation or build step. Your local files stay in your browser.
 
 - **Choose what to explore.** Open a file or folder. Pick a file or table from the list when there are several, then browse the first 100 rows.
 - **Find what matters.** Search words, `"exact phrases"`, `-exclusions`, or `column:value`, with matching text highlighted.
@@ -31,3 +31,5 @@ Bouquet is a viewer: no SQL console or editing. Search on large SQLite tables ma
 @vladaaar, 2026
 
 Excel support is provided by [`modules/excel.js`](modules/excel.js). It loads a local copy of SheetJS on first use, including offline on `file://`. Keep `modules/vendor/sheetjs-0.20.3/` with the project. Worksheets become tables with Excel column letters; the first row remains data. Formulas use cached results and are not recalculated. [Third-party license and source](modules/vendor/sheetjs-0.20.3/README.md).
+
+CronosPro support is in [`modules/cronos.js`](modules/cronos.js). Select `CroStru.dat/.tad` and `CroBank.dat/.tad` together. Components are grouped by directory: one database opens immediately; multiple databases appear as separate list items. Automatic KOD recovery is supported; if it fails, the dialog accepts a KOD table, **not a regular CronosPro password**. See [format support and limitations](README_RU.md#cronospro).

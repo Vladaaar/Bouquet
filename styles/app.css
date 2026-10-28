@@ -146,3 +146,8 @@ body.dragging .drop{display:grid}
   .content-panel{padding:24px 16px}.empty-state{padding:16px}
   .upload-button{min-width:0;width:100%;font-size:17px}
 }
+
+.cronos-key-dialog{width:min(520px,calc(100vw - 32px));padding:24px;border:1px solid var(--line);border-radius:var(--r-box);background:var(--surface);color:var(--ink)}
+.cronos-key-dialog::backdrop{background:rgba(0,0,0,.3)}
+.cronos-key-dialog input{width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.cronos-key-dialog .action-button{margin-right:8px}

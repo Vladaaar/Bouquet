@@ -481,3 +481,61 @@ test('invalid language plugins are rejected before registration and leave the ac
     assert.equal(B.ui.language, 'language-ru');
   }
 });
+
+function cronosFiles(folder = '', count = 8) {
+  const { fixture } = require('./fixtures/cronos.cjs');
+  const data = fixture({ count });
+  data['CroIndex.dat'] = data['CroBank.dat']; data['CroIndex.tad'] = data['CroBank.tad'];
+  return Object.entries(data).map(([name, bytes]) => Object.assign(new Blob([bytes]), {
+    name, webkitRelativePath: folder ? folder + '/' + name : ''
+  }));
+}
+function addCronos(context) {
+  context.DecompressionStream = DecompressionStream;
+  context.Bouquet.exec(fs.readFileSync(path.join(__dirname, '../modules/cronos.js'), 'utf8'), 'cronos.js');
+}
+test('six Cronos components open one database immediately and retain all companion sources', async () => {
+  const { el, context, views } = setup(); addCronos(context);
+  el('pickFile').onchange({ target: { files: cronosFiles(), value: '' } });
+  await until(() => views.length);
+  assert.equal(views.length, 1);
+  assert.equal(views[0].rows.length, 8);
+  assert.equal(current(el).textContent, 'CronosPro');
+  assert.equal(views[0].rows[0].cells[1], 'row0');
+});
+test('twelve Cronos components form two database entries and stay isolated on navigation', async () => {
+  const { el, context, views, select } = setup(); addCronos(context);
+  el('pickFile').onchange({ target: { files: [...cronosFiles('Alpha', 3), ...cronosFiles('Beta', 8)], value: '' } });
+  const items = () => el('stage').children[0].children[1].children;
+  assert.equal(items().length, 2);
+  assert.equal(items()[0].children[0].textContent, 'Alpha');
+  assert.equal(items()[1].children[0].textContent, 'Beta');
+  assert.equal(views.length, 0);
+  select(1); await until(() => views.length);
+  assert.equal(views[0].rows.length, 8);
+  assert.equal(current(el).textContent, 'Beta');
+  crumbs(el).find(node => node.dataset.level === 'files').click();
+  assert.equal(items().length, 2);
+  select(0); await until(() => views.length === 2);
+  assert.equal(views[1].rows.length, 3);
+});
+test('database grouping preserves independent files and updates when the plugin is loaded later', async () => {
+  const { el, context, views, select } = setup();
+  const text = Object.assign(new Blob(['notes']), { name: 'notes.txt' });
+  el('pickFile').onchange({ target: { files: [...cronosFiles('Bank'), text], value: '' } });
+  assert.equal(el('stage').children[0].children[1].children.length, 7);
+  addCronos(context);
+  const items = el('stage').children[0].children[1].children;
+  assert.equal(items.length, 2);
+  assert.equal(items[0].children[0].textContent, 'Bank');
+  assert.equal(items[1].children[0].textContent, 'notes.txt');
+  select(1); await until(() => views.length);
+  assert.equal(views[0].rows[0].cells[0], 'notes');
+});
+test('loading the Cronos plugin later auto-opens a sole grouped database', async () => {
+  const { el, context, views } = setup();
+  el('pickFile').onchange({ target: { files: cronosFiles('Bank'), value: '' } });
+  addCronos(context); await until(() => views.length);
+  assert.equal(views.length, 1);
+  assert.equal(current(el).textContent, 'Bank');
+});

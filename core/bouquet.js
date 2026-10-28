@@ -120,6 +120,12 @@
           const period = document.createElement('span'); period.textContent = '.';
           pre.appendChild(link); pre.appendChild(period);
         }
+        if (view.table.openFiles) {
+          const space = document.createElement('span'); space.textContent = '\n';
+          const link = document.createElement('a'); link.href = '#open'; CORE.i18n.bind(link, 'open');
+          link.onclick = event => { event.preventDefault(); CORE.ui.actions.chooseFiles(); };
+          pre.appendChild(space); pre.appendChild(link);
+        }
         host.replaceChildren(pre); return;
       }
       pre.innerHTML = view.rows.map(r =>
