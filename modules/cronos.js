@@ -254,10 +254,10 @@
             const rows = []; let found = 0;
             for (let id = cursor ?? 1; id <= bank.count; id++) {
               U.checkAbort(signal); const data = await record(id, signal);
-              if (data?.[0] === table.id) { const row = cells(data, table, id); if (!match || match(row)) { if (rows.length === limit) return { rows, hasMore: true, nextCursor: id }; rows.push({ n: id, cells: row }); found++; } }
+              if (data?.[0] === table.id) { const row = cells(data, table, id); if (!match || match(row)) { if (rows.length === limit) return { rows, hasMore: true, nextCursor: id, scanned: id - 1 }; rows.push({ n: id, cells: row }); found++; } }
               if (id % 128 === 0) { onProgress?.({ scanned: id, found, rows: rows.slice() }); await tick(); }
             }
-            U.checkAbort(signal); return { rows, hasMore: false, nextCursor: null };
+            U.checkAbort(signal); return { rows, hasMore: false, nextCursor: null, scanned: bank.count };
           }
         })),
         close() { closed = true; cache.clear(); stru = bank = index = null; }

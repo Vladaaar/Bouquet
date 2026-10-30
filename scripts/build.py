@@ -35,7 +35,7 @@ def payload(root):
     # Deliberate allowlist: never ship arbitrary databases, dotfiles or development files.
     names = ["index.html", "LICENSE", "README.md", "README_RU.md",
              "VERSION", "bouquet.files.json", "sqlite_search.png", "data/example.db", "data/example.csv"]
-    for directory in ("core", "styles", "modules"):
+    for directory in ("core", "styles", "modules", "docs"):
         names.extend(p.relative_to(root).as_posix() for p in (root / directory).rglob("*")
                      if p.is_file() and not any(part.startswith(".") for part in p.relative_to(root).parts))
     result = {}

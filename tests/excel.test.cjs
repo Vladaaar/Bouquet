@@ -44,8 +44,10 @@ for (const [extension, bookType] of [['xlsx', 'xlsx'], ['xls', 'biff8']]) {
     assert.deepEqual(json(first.rows[0]), { n: 1, cells: ['Название', 'Цена', 'Дата', 'Итог', 'Да/нет'] });
     assert.deepEqual(json(first.rows[1].cells), ['Роза', '2.50', '2024-01-02', '6', 'TRUE']);
     assert.equal(first.total, 2);
+    assert.equal(first.scanned, 2);
     assert.deepEqual(json(db.tables[1].columns), ['C', 'D', 'E']);
     const offset = await db.tables[1].read();
+    assert.equal(offset.scanned, 3); // Relative to the sheet range, not Excel row 7.
     assert.deepEqual(json(offset.rows), [{ n: 5, cells: ['Начало в C5', '', ''] }, { n: 6, cells: ['', '', ''] }, { n: 7, cells: ['', '', 'Конец в E7'] }]);
     assert.deepEqual(json((await db.tables[2].read()).rows), []);
     db.close();

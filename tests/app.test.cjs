@@ -332,20 +332,20 @@ test('opening a picker preserves the current source and pending reads until a ne
   assert.equal(views[0].rows[0].cells[0], 'kept');
 });
 
-test('one status summary reports totals and matches alongside file state', async () => {
+test('status summary contains only found, scanned and known total in that order', async () => {
   const { el, views, choose, submit } = setup();
   choose('test.txt'); await until(() => views.length);
-  assert.equal(el('dataSummary').textContent, '1 строка · 1 кол.');
+  assert.equal(el('dataSummary').textContent, 'Найдено: 1 · Просмотрено строк: 1 · Всего строк: 1');
   assert.equal(el('fileState').dataset.state, 'go');
   el('q').value = 'absent'; submit(); await until(() => views.at(-1).query === 'absent');
-  assert.equal(el('dataSummary').textContent, '1 строка · 1 кол. · найдено 0');
+  assert.equal(el('dataSummary').textContent, 'Найдено: 0 · Просмотрено строк: 1 · Всего строк: 1');
   let picked = 0; el('pickFile').onclick = () => { picked++; };
   current(el).click();
   assert.equal(picked, 0);
   el('openFile').click();
   assert.equal(picked, 1);
   assert.equal(el('fileContent').hidden, false);
-  assert.equal(el('dataSummary').textContent, '1 строка · 1 кол. · найдено 0');
+  assert.equal(el('dataSummary').textContent, 'Найдено: 0 · Просмотрено строк: 1 · Всего строк: 1');
 });
 
 test('settings replace the file path and actions, and close restores the exact explorer view', async () => {
@@ -403,7 +403,7 @@ test('language cards preserve data, pagination, query, scroll and renderer DOM',
   english.children[2].click();
   assert.equal(ui.language, 'language-en');
   assert.equal(pathLabel(el), 'Settings');
-  assert.match(el('dataSummary').textContent, /220 rows.*220 found/);
+  assert.match(el('dataSummary').textContent, /Found: 220.*Rows scanned: 220.*Total rows: 220/);
   assert.equal(views.length, count);
   assert.equal(views.at(-1), view);
   assert.equal(view.table.columns[0], 'Оригинальная колонка');
@@ -413,7 +413,7 @@ test('language cards preserve data, pagination, query, scroll and renderer DOM',
   el('closeSettings').click();
   assert.equal(pathLabel(el), 'Оригинальный файл.txt');
   ui.setLanguage('language-ru');
-  assert.match(el('dataSummary').textContent, /220 строк.*найдено 220/);
+  assert.match(el('dataSummary').textContent, /Найдено: 220.*Просмотрено строк: 220.*Всего строк: 220/);
   assert.equal(views.length, count);
   assert.equal(el('languageList').children.length, 2);
   assert.equal(el('themeList').children.length, 3);
@@ -434,7 +434,7 @@ test('language changes during an asynchronous read keep the same request and loc
   assert.equal(signal.aborted, false);
   assert.equal(calls, 1);
   release(); await until(() => views.length);
-  assert.equal(el('dataSummary').textContent, '1 row · 1 col.');
+  assert.equal(el('dataSummary').textContent, 'Found: 1 · Rows scanned: 128 · Total rows: 1');
   assert.equal(views[0].rows[0].cells[0], 'kept');
 });
 
@@ -538,4 +538,54 @@ test('loading the Cronos plugin later auto-opens a sole grouped database', async
   addCronos(context); await until(() => views.length);
   assert.equal(views.length, 1);
   assert.equal(current(el).textContent, 'Bank');
+});
+
+test('scan counters update without matches, keep language during reading and retain explicit errors', async () => {
+  const { el, context, choose, submit, views } = setup();
+  let finish, reads = 0;
+  context.Bouquet.register({ kind: 'interpreter', id: 'scanned', priority: 100, test: () => true,
+    open() { return { tables: [{ name: 'hidden name', columns: ['column'], async read({ match, onProgress }) {
+      reads++;
+      if (!match) return { rows: [{ n: 1, cells: ['value'] }], hasMore: true, nextCursor: 1, scanned: 1 };
+      if (match(['error'])) throw new Error('Read failed explicitly');
+      onProgress({ scanned: 128, found: 0, rows: [] });
+      await new Promise(resolve => { finish = resolve; });
+      return { rows: [], hasMore: false, scanned: 300, total: 300 };
+    } }] }; }
+  });
+  choose(); await until(() => views.length);
+  assert.equal(el('dataSummary').textContent, 'Найдено: ≥ 1 · Просмотрено строк: 1');
+  el('q').value = 'missing'; submit(); await until(() => finish);
+  assert.equal(el('dataSummary').textContent, 'Найдено: ≥ 0 · Просмотрено строк: 128');
+  context.Bouquet.ui.setLanguage('language-en');
+  assert.equal(el('dataSummary').textContent, 'Found: ≥ 0 · Rows scanned: 128');
+  assert.equal(reads, 2);
+  finish(); await until(() => views.at(-1).query === 'missing');
+  assert.equal(el('dataSummary').textContent, 'Found: 0 · Rows scanned: 300 · Total rows: 300');
+  assert.equal(el('status').hidden, true);
+  el('q').value = 'error'; submit(); await until(() => el('status').textContent.includes('Read failed explicitly'));
+  assert.equal(el('status').hidden, false);
+});
+
+test('Hello example mounts once when loaded, translates and returns to the preserved viewer', async () => {
+  const { el, context, choose, views } = setup();
+  choose('hello.txt'); await until(() => views.length);
+  const previous = views[0];
+  context.Bouquet.exec(fs.readFileSync(path.join(__dirname, '../modules/hello.js'), 'utf8'), 'hello.js');
+  assert.equal(context.Bouquet.plugins.find(p => p.id === 'hello').uiError, undefined);
+  const panel = el('workspace').children.at(-1);
+  assert.equal(panel.children[0].textContent, 'Привет, Bouquet!');
+  context.Bouquet.ui.selectTab('hello');
+  assert.equal(panel.hidden, false);
+  context.Bouquet.ui.setLanguage('language-en');
+  assert.equal(panel.children[0].textContent, 'Hello, Bouquet!');
+  assert.equal(panel.children[2].textContent, 'Return to explorer');
+  panel.children[2].click();
+  assert.equal(context.Bouquet.ui.activeTab, 'explorer');
+  assert.equal(panel.hidden, true);
+  assert.equal(views.length, 1);
+  assert.equal(context.Bouquet.ui.currentView.view, previous);
+  context.Bouquet.ui.selectTab('hello');
+  assert.equal(el('workspace').children.at(-1), panel);
+  assert.equal(panel.children.length, 3);
 });

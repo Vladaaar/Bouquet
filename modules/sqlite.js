@@ -187,13 +187,13 @@
           while (true) {
             const before = copy(c);
             const r = await next(c, signal);
-            if (!r) return { rows, nextCursor: null, hasMore: false, total: match ? undefined : c.n };
+            if (!r) return { rows, nextCursor: null, hasMore: false, total: c.n, scanned: c.n };
             const values = spec.order ? spec.order.reduce((out, column, i) => { out[column] = r.values[i]; return out; }, []) : r.values;
             if (spec.rowidCol >= 0 && values[spec.rowidCol] == null) values[spec.rowidCol] = r.rowid;
             while (values.length < table.columns.length) values.push(null);
             const cells = values;
             if (!match || match(cells)) {
-              if (rows.length === limit) return { rows, nextCursor: before, hasMore: true };
+              if (rows.length === limit) return { rows, nextCursor: before, hasMore: true, scanned: before.n };
               rows.push({ n: c.n, cells });
             }
             if (++scanned % 128 === 0) {

@@ -17,6 +17,7 @@ for(const version of ['01.02','01.03','01.11'])test('Cronos '+version+': schema,
  const {B,plugin}=setup(),db=await open(plugin,B,fixture({version,extended:true}));
  assert.equal(db.tables.length,1);assert.deepEqual(json(db.tables[0].columns),['ID','Text','Date','Time']);
  const first=await db.tables[0].read({limit:2}),next=await db.tables[0].read({limit:2,cursor:first.nextCursor});
+ assert.equal(first.scanned,first.nextCursor-1);assert.equal(next.scanned,next.nextCursor-1);
  assert.deepEqual(json(first.rows[0]),{n:1,cells:[1,'row0','2006-01-02','09:30']});
  assert.equal(next.rows[0].n,4);assert.equal(next.rows[0].cells[1],'row2');
  const filtered=await db.tables[0].read({match:cells=>cells[1]==='row7'});assert.equal(filtered.rows.length,1);assert.equal(filtered.hasMore,false);

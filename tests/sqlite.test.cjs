@@ -56,6 +56,7 @@ test('lazy schema, ordered cursor traversal, overflow, rowid and empty tables', 
     do { result = await t.read({ cursor: token, limit: 37 }); rows.push(...result.rows); token = result.nextCursor; } while (result.hasMore);
     assert.equal(rows.length, 1500);
     assert.equal(result.total, 1500);
+    assert.equal(result.scanned, 1500);
     for (let i = 0; i < rows.length; i++) { assert.equal(rows[i].n, i + 1); assert.equal(rows[i].cells[0], i + 1); }
     assert.equal(rows[41].cells[2], 'needle ' + 'x'.repeat(2000));
     assert.equal(rows[0].cells[4], '‹blob 3 Б›');
@@ -64,6 +65,8 @@ test('lazy schema, ordered cursor traversal, overflow, rowid and empty tables', 
     const second = await t.read({ cursor: first.nextCursor, limit: 37 });
     assert.deepEqual((await t.read({ cursor: first.nextCursor, limit: 37 })).rows, second.rows);
     assert.equal(first.nextCursor.n, 37); // read never mutates caller's cursor
+    assert.equal(first.scanned, 37);
+    assert.equal(second.scanned, 74);
   });
 });
 test('search syntax, pagination, cancellation and event loop yields', async () => {

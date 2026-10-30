@@ -70,9 +70,6 @@ h1{font-size:28px;margin:0 0 12px}h2{font-size:18px;margin:0 0 14px}
 .content-panel>.sign{margin-top:32px;padding-bottom:8px}
 .settings-card select{display:block;margin-top:12px;width:100%;padding:10px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
 input[type=checkbox]{accent-color:var(--iris)}
-.dot{width:9px;height:9px;border-radius:50%;flex:none;background:var(--stop);transition:background .25s}
-.file-state[data-state=go] .dot{background:var(--go)}
-.file-state[data-state=wait] .dot{background:var(--wait)}
 
 .search{display:flex;align-items:center;gap:12px;width:100%;background:var(--surface);
   border:1px solid var(--line);border-radius:var(--r-pill);padding:0 22px;box-shadow:var(--shadow)}
@@ -114,11 +111,9 @@ body.dragging .drop{display:grid}
 
 .data-status{display:flex;align-items:center;gap:8px;flex:none;width:100%;min-height:30px;padding:0 26px 8px}
 .file-state{min-width:0;color:var(--muted);font-size:13px}
-.data-summary{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-.status{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-.file-state[data-state=loading] .dot{background:transparent;border:2px solid var(--line);border-top-color:var(--iris);animation:spin .8s linear infinite}
+.data-summary{min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.read-notice{padding:0 26px 8px;font-size:13px;color:var(--muted);overflow-wrap:anywhere}
 @keyframes spin{to{transform:rotate(360deg)}}
-@media(prefers-reduced-motion:reduce){.file-state[data-state=loading] .dot{animation:none;border-color:var(--iris)}}
 
 /* Controls keep their footprint while typing; suppress the native search cross. */
 .search input::-webkit-search-cancel-button,.search input::-webkit-search-decoration{-webkit-appearance:none;appearance:none;display:none}
@@ -142,6 +137,7 @@ body.dragging .drop{display:grid}
   .file-control{width:40px;height:40px}
   .settings-button{width:40px;height:40px}
   .bar{padding:12px 10px 8px}.stage{padding:0 10px}.data-status{padding:0 16px 8px;gap:6px}
+  .read-notice{padding:0 16px 8px}
   .search{gap:8px;padding:0 12px}.search input{font-size:17px;padding:14px 0}
   .content-panel{padding:24px 16px}.empty-state{padding:16px}
   .upload-button{min-width:0;width:100%;font-size:17px}

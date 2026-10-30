@@ -48,7 +48,7 @@
                 return cell?.f && cell.v == null ? '=' + cell.f : cell ? X.utils.format_cell(cell) : '';
               });
               if (!match || match(cells)) {
-                if (rows.length === limit) return { rows, hasMore: true, nextCursor: r, total };
+                if (rows.length === limit) return { rows, hasMore: true, nextCursor: r, total, scanned: r - range.s.r };
                 rows.push({ n: r + 1, cells });
               }
               if ((r - range.s.r + 1) % 128 === 0) {
@@ -57,7 +57,7 @@
                 U.checkAbort(signal);
               }
             }
-            return { rows, hasMore: false, nextCursor: null, total };
+            return { rows, hasMore: false, nextCursor: null, total, scanned: total };
           }
         };
       });

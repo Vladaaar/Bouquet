@@ -14,13 +14,16 @@
   const MEMORY_LIMIT = 100 * 1024 * 1024;
   let opening, reading, debounce, selectionVersion = 0;
   const search = () => B.features.search;
-  const setStatus = (key, params) => I.bind(status, key, params);
+  const setStatus = (key, params) => {
+    I.bind(status, key, params);
+    status.hidden = !key || ['reading', 'searching', 'progress'].includes(key);
+  };
   function sourceStatus() {
     if (S.error) setStatus('openFailed', { error: () => I.errorText(S.error) });
     else if (S.source?.noteKey) setStatus(S.source.noteKey);
-    else { setStatus(null); status.textContent = S.source?.note || ''; }
+    else { setStatus(null); status.textContent = S.source?.note || ''; status.hidden = !status.textContent; }
   }
-  function resetPages() { S.page = 0; S.cursors = [null]; S.total = undefined; S.matches = undefined; }
+  function resetPages() { S.page = 0; S.cursors = [null]; S.total = undefined; S.matches = undefined; S.summaryView = null; }
   const choose = (list, value) => list.filter(m => {
     try { return m.test(value); } catch { return false; }
   }).sort((a, b) => (b.priority || 0) - (a.priority || 0))[0];
@@ -174,7 +177,7 @@
     form.hidden = !search() || S.location !== 'data' || !table;
   }
   function paintList() {
-    B.ui.currentView = null; stage.replaceChildren(); I.bind(summary, null); pager.hidden = true;
+    B.ui.currentView = null; S.summaryView = null; stage.replaceChildren(); I.bind(summary, null); pager.hidden = true;
     const files = S.location === 'files';
     const entries = files ? S.collection.items : S.dataset.tables;
     const list = document.createElement('div'); list.className = 'entity-browser';
@@ -215,14 +218,14 @@
   }
 
   function paintSummary(view) {
+    S.summaryView = view;
     summary.textContent = [
-      view.dataset.tables.length > 1 ? I.label(view.table) : null,
-      view.total == null ? I.t('unknownTotal') : I.t('rows', { count: view.total }),
-      I.t('columns', { count: view.table.columns.length }),
-      view.query.trim() ? I.t(view.foundExact ? 'found' : 'foundMinimum', { count: view.found }) : null,
-      view.table.noteKey ? I.t(view.table.noteKey, view.table.noteParams) : view.table.note
+      I.t(view.foundExact ? 'summaryFound' : 'summaryFoundMinimum', { count: view.found }),
+      I.t('summaryScanned', { count: view.scanned }),
+      view.total == null ? null : I.t('summaryTotal', { count: view.total })
     ].filter(Boolean).join(' · ');
     summary.title = summary.textContent;
+    fileState.setAttribute('aria-label', summary.textContent);
   }
   function renderView(view) {
     paintSummary(view);
@@ -235,7 +238,7 @@
     const table = S.dataset?.tables[S.active];
     if (!table) return null;
     const feature = search(), query = S.query;
-    let rows, total, found, foundExact, hasMore, pages;
+    let rows, total, found, foundExact, hasMore, pages, scanned = 0;
     if (table.read) {
       let match, shown = 0;
       if (feature && query.trim()) {
@@ -243,21 +246,23 @@
           : cells => feature.filter({ ...table, rows: [cells] }, query).length > 0;
       }
       const result = await table.read({ cursor: S.cursors[S.page], limit: S.pageSize, match, signal,
-        onProgress({ scanned, found, rows: partial }) {
+        onProgress({ scanned: count, found, rows: partial }) {
           if (signal.aborted) return;
-          setStatus('progress', { scanned, found });
+          scanned = count ?? scanned;
+          const view = { dataset: S.dataset, table, query, rows: partial || [], total: S.total, scanned,
+            found: S.page * S.pageSize + found, foundExact: false,
+            page: S.page, pageSize: S.pageSize,
+            highlight: feature && query.trim() ? value => feature.highlight(value, query) : U.escape };
+          paintSummary(view);
           if (partial?.length && partial.length !== shown) {
             shown = partial.length;
-            const view = { dataset: S.dataset, table, query, rows: partial, total: S.total,
-              found: S.page * S.pageSize + found, foundExact: false,
-              page: S.page, pageSize: S.pageSize,
-              highlight: feature && query.trim() ? value => feature.highlight(value, query) : U.escape };
             renderView(view);
           }
         }
       });
       U.checkAbort(signal);
       rows = result.rows;
+      scanned = result.scanned ?? Math.max(scanned, S.page * S.pageSize + rows.length);
       hasMore = result.hasMore;
       if (hasMore) S.cursors[S.page + 1] = result.nextCursor;
       if (result.total != null) S.total = result.total;
@@ -265,6 +270,7 @@
       if (!hasMore) S.matches = S.page * S.pageSize + rows.length;
       found = S.matches ?? S.page * S.pageSize + rows.length;
       foundExact = S.matches != null;
+      if (!match && total != null) { found = total; foundExact = true; }
       pages = S.matches == null ? undefined : Math.max(1, Math.ceil(S.matches / S.pageSize));
     } else {
       const all = table.rows;
@@ -277,8 +283,9 @@
       rows = indices ? indices.slice(from, from + S.pageSize).map(i => ({ n: i + 1, cells: all[i] }))
         : all.slice(from, from + S.pageSize).map((cells, i) => ({ n: from + i + 1, cells }));
       hasMore = S.page + 1 < pages;
+      scanned = indices ? all.length : from + rows.length;
     }
-    return { dataset: S.dataset, table, query, rows, total, found, foundExact, hasMore,
+    return { dataset: S.dataset, table, query, rows, total, found, foundExact, hasMore, scanned,
       page: S.page, pages, pageSize: S.pageSize,
       highlight: feature && query.trim() ? value => feature.highlight(value, query) : U.escape };
   }
@@ -296,6 +303,7 @@
     // Keep the current table in place until the new result is ready.
     const request = reading = new AbortController();
     S.reading = true; S.readError = null; paintFileState();
+    paintSummary({ found: S.page * S.pageSize, foundExact: false, scanned: 0, total: S.total });
     stage.setAttribute('aria-busy', 'true');
     $('prev').disabled = $('next').disabled = true;
     setStatus(S.query.trim() ? 'searching' : 'reading');
@@ -335,8 +343,6 @@
     const busy = S.opening || S.reading;
     const ready = S.interp && (!S.interp.fallback || U.isText(S.bytes || new Uint8Array()));
     fileState.dataset.state = busy ? 'loading' : S.error || S.readError || (!S.fileName && !S.collection) ? 'stop' : S.location === 'files' ? 'go' : ready ? 'go' : 'wait';
-    fileState.title = busy ? I.t('readingData') : S.error || S.readError ? I.errorText(S.error || S.readError) : I.t(S.location === 'files' ? 'folderReady' : ready ? 'ready' : 'unknownFormat');
-    fileState.setAttribute('aria-label', fileState.title);
   }
   $('openFile').onclick = () => $('pickFile').click();
   $('pickFile').onchange = e => { openFiles(Array.from(e.target.files)); e.target.value = ''; };
@@ -397,7 +403,7 @@
   B.on('tab:change', paintHeader);
   B.on('language:change', () => {
     paintHeader(); paintFileState();
-    if (B.ui.currentView) paintSummary(B.ui.currentView.view);
+    if (S.summaryView) paintSummary(S.summaryView);
   });
   async function scanFolder() {
     const version = selectionVersion;
