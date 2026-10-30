@@ -272,8 +272,9 @@
   "страница {page} за границей файла": "Page {page} is outside the file"
 };
   const own = (object, key) => object && Object.prototype.hasOwnProperty.call(object, key);
+  const defaultLocale = globalThis.document?.documentElement?.getAttribute?.('lang') === 'en' ? 'en' : 'ru';
   const I = B.i18n = {
-    language: 'language-ru', locale: 'ru',
+    language: 'language-' + defaultLocale, locale: defaultLocale,
     t(key, params = {}) {
       if (!key) return '';
       const pack = B.plugins.find(p => p.id === I.language);

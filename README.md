@@ -12,7 +12,7 @@ A lightweight browser viewer for SQLite, CronosPro, Excel (XLS/XLSX), CSV, TSV, 
 - **Browse large databases.** Progressive SQLite reading loads rows as needed instead of loading the whole database into memory.
 - **Make it yours.** Add formats, views, sections, themes, and language packs through JavaScript plugins. Open settings with the gear in the header; return to your file with the Bouquet logo without losing your search.
 
-**Try it:** download the project, keep its folders together, and open `index.html` in your browser. Use “📂 Открыть” to choose one or more files, drop files into the window, or select [`data/example.db`](data/example.db).
+**Try it:** download a `bouquet-X.Y.Z-en.zip` or `bouquet-X.Y.Z-ru.zip` from [Releases](https://github.com/Vladaaar/Bouquet/releases), extract it, and open `index.html` in your browser. Each archive includes all modules and starts in its named language; you can switch languages in Settings. Use “📂 Open” to choose one or more files, drop files into the window, or select [`data/example.db`](data/example.db).
 
 The sample is a tiny flower shop database. Choose `purchases` from the table list and click 🔗 beside `flower_id` to see the flower. Open `stock` and click 🔗 beside an `id` to see its purchases. The peony has 53 purchases—enough to try paging through the drawer.
 
@@ -27,6 +27,19 @@ Then visit [localhost:8000](http://localhost:8000). A server is optional; pickin
 Bouquet is a viewer: no SQL console or editing. Search on large SQLite tables may scan the whole table; Excel, CSV, TSV, and text files currently load into memory. The interface includes Russian and English. Choose a language card in Settings; add more languages through plugins.
 
 [Full documentation & plugin API (Russian)](README_RU.md)
+
+Releases use stable `vX.Y.Z` tags matching [VERSION](VERSION), `Bouquet.version` in `core/bouquet.js`, and a dated entry in [CHANGELOG.md](CHANGELOG.md). To prepare a release, update those three files, commit them, then push the matching tag. GitHub Actions runs the tests, builds both ZIPs with SHA-256 checksums, publishes a GitHub Release using the changelog entry, and deploys Pages (Russian at the root, English at `/en/`). Branch pushes and pull requests only test and build.
+
+For Pages, set **Settings → Pages → Source → GitHub Actions** once, and allow version tags in the `github-pages` environment's deployment rules. This uses GitHub's [custom Pages workflow](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages). Release publishing and Pages deployment are separate jobs: a Pages configuration error does not block the ZIP release.
+
+Build locally with Python 3.10+ (no packages required):
+
+```sh
+python3 scripts/build.py
+python3 -m unittest discover -s tests -p 'test_*.py'
+```
+
+Output is in ignored `dist/`: two ZIPs, `SHA256SUMS.txt`, `release-notes.md`, and the Pages tree in `site/`. Only the bundled `data/example.db` and `data/example.csv` are shipped; local databases, tests and `design.md` are excluded. The release manifest is checked to prevent publishing local database paths. The source itself still opens directly without a build step.
 
 @vladaaar, 2026
 
