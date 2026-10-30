@@ -27,13 +27,13 @@ def metadata(root, tag=None):
     for section in sections:
         heading, _, notes = section.partition("\n")
         if re.fullmatch(r"\[" + re.escape(version) + r"\] - \d{4}-\d{2}-\d{2}", heading) and notes.strip():
-            return version, "## " + section.strip() + "\n"
+            return version
     raise ValueError(f"CHANGELOG.md needs nonempty release notes for [{version}]")
 
 
 def payload(root):
     # Deliberate allowlist: never ship arbitrary databases, dotfiles or development files.
-    names = ["index.html", "LICENSE", "README.md", "README_RU.md", "CHANGELOG.md",
+    names = ["index.html", "LICENSE", "README.md", "README_RU.md",
              "VERSION", "bouquet.files.json", "sqlite_search.png", "data/example.db", "data/example.csv"]
     for directory in ("core", "styles", "modules"):
         names.extend(p.relative_to(root).as_posix() for p in (root / directory).rglob("*")
@@ -59,7 +59,7 @@ def archive(path, prefix, files):
 
 
 def build(root, output, tag=None):
-    version, notes = metadata(root, tag)
+    version = metadata(root, tag)
     files = payload(root)
     # The demo manifest must never refer to private local data or missing files.
     if json.loads(files["bouquet.files.json"]) != {"files": ["data/example.db", "data/example.csv"]}:
@@ -91,7 +91,8 @@ def build(root, output, tag=None):
             shutil.rmtree(output / "site")
         shutil.copytree(site, output / "site")
     (output / "SHA256SUMS.txt").write_text("".join(checksums), encoding="utf-8")
-    (output / "release-notes.md").write_text(notes, encoding="utf-8")
+    # Remove the generated notes left by earlier versions of the builder.
+    (output / "release-notes.md").unlink(missing_ok=True)
     return version
 
 

@@ -13,11 +13,11 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - name: Test application
@@ -33,15 +33,22 @@ jobs:
           else
             python3 scripts/build.py
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
-          name: distributions
-          path: |
-            dist/*.zip
-            dist/SHA256SUMS.txt
-            dist/release-notes.md
+          name: release-ru
+          path: dist/bouquet-*-ru.zip
           if-no-files-found: error
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-en
+          path: dist/bouquet-*-en.zip
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-checksums
+          path: dist/SHA256SUMS.txt
+          if-no-files-found: error
+      - uses: actions/upload-pages-artifact@v5
         if: startsWith(github.ref, 'refs/tags/v')
         with:
           path: dist/site
@@ -53,9 +60,10 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
-          name: distributions
+          pattern: release-*
+          merge-multiple: true
           path: dist
       - name: Publish GitHub Release
         env:
@@ -63,8 +71,12 @@ jobs:
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          gh release create "$RELEASE_TAG" dist/*.zip dist/SHA256SUMS.txt \
-            --verify-tag --title "Bouquet $RELEASE_TAG" --notes-file dist/release-notes.md
+          release_version="${RELEASE_TAG#v}"
+          gh release create "$RELEASE_TAG" \
+            "dist/bouquet-$release_version-ru.zip" \
+            "dist/bouquet-$release_version-en.zip" \
+            dist/SHA256SUMS.txt \
+            --verify-tag --title "Bouquet $RELEASE_TAG" --notes ""
 
   pages:
     if: startsWith(github.ref, 'refs/tags/v')
@@ -80,7 +92,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
       - name: Deploy Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

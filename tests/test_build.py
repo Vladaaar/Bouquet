@@ -44,6 +44,8 @@ class DistributionTests(unittest.TestCase):
                 self.assertIn(module.relative_to(ROOT).as_posix(), files)
             self.assertIn("modules/vendor/sheetjs-0.20.3/LICENSE", files)
             self.assertIn("modules/vendor/cronodump/LICENSE", files)
+            self.assertNotIn("CHANGELOG.md", files)
+            self.assertNotIn("release-notes.md", files)
             self.assertEqual({name for name in files if name.startswith("data/")}, {"data/example.db", "data/example.csv"})
             self.assertFalse(any(name.startswith(("tests/", "scripts/", ".git")) or name.endswith((".DS_Store", "design.md")) for name in files))
             site = self.output / "site" / ("en" if locale == "en" else "")
@@ -68,15 +70,20 @@ class DistributionTests(unittest.TestCase):
               assert.notEqual(lang, locale);
             """, str(site), locale], check=True, capture_output=True)
         self.assertTrue((self.output / "site/.nojekyll").is_file())
-        self.assertIn(f"[{version}]", (self.output / "release-notes.md").read_text())
+        self.assertEqual({p.name for p in self.output.iterdir()}, {
+            f"bouquet-{version}-ru.zip", f"bouquet-{version}-en.zip", "SHA256SUMS.txt", "site"
+        })
+        self.assertFalse((self.output / "site/CHANGELOG.md").exists())
 
     def test_reproducible_and_cleans_stale_pages_files(self):
         version = builder.build(ROOT, self.output)
         first = (self.output / f"bouquet-{version}-en.zip").read_bytes()
         (self.output / "site/obsolete.js").touch()
+        (self.output / "release-notes.md").write_text("Obsolete generated notes")
         builder.build(ROOT, self.output, "v" + version)
         self.assertEqual(first, (self.output / f"bouquet-{version}-en.zip").read_bytes())
         self.assertFalse((self.output / "site/obsolete.js").exists())
+        self.assertFalse((self.output / "release-notes.md").exists())
 
     def test_wrong_tag_cannot_produce_a_release(self):
         with self.assertRaisesRegex(ValueError, "does not match VERSION"):
@@ -116,6 +123,7 @@ class DistributionTests(unittest.TestCase):
     def test_custom_manifest_cannot_expose_local_databases(self):
         root = Path(self.temporary.name) / "source"
         root.mkdir()
+        shutil.copyfile(ROOT / "CHANGELOG.md", root / "CHANGELOG.md")
         for name, data in builder.payload(ROOT).items():
             destination = root / name
             destination.parent.mkdir(parents=True, exist_ok=True)

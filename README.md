@@ -28,9 +28,9 @@ Bouquet is a viewer: no SQL console or editing. Search on large SQLite tables ma
 
 [Full documentation & plugin API (Russian)](README_RU.md)
 
-Releases use stable `vX.Y.Z` tags matching [VERSION](VERSION), `Bouquet.version` in `core/bouquet.js`, and a dated entry in [CHANGELOG.md](CHANGELOG.md). To prepare a release, update those three files, commit them, then push the matching tag. GitHub Actions runs the tests, builds both ZIPs with SHA-256 checksums, publishes a GitHub Release using the changelog entry, and deploys Pages (Russian at the root, English at `/en/`). Branch pushes and pull requests only test and build.
+Releases use stable `vX.Y.Z` tags matching [VERSION](VERSION), `Bouquet.version` in `core/bouquet.js`, and a dated entry in [CHANGELOG.md](https://github.com/Vladaaar/Bouquet/blob/main/CHANGELOG.md). To prepare a release, update those three files, commit them, then push the matching tag. GitHub Actions runs the tests, publishes two separate ZIP assets (RU and EN) and SHA-256 checksums in one GitHub Release, and deploys Pages (Russian at the root, English at `/en/`). Release notes remain in the repository only: they are excluded from archives, Pages and the release description. Branch pushes and pull requests only test and build. Actions also exposes separate `release-ru`, `release-en` and `release-checksums` artifacts.
 
-For Pages, set **Settings → Pages → Source → GitHub Actions** once, and allow version tags in the `github-pages` environment's deployment rules. This uses GitHub's [custom Pages workflow](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages). Release publishing and Pages deployment are separate jobs: a Pages configuration error does not block the ZIP release.
+For Pages, set **Settings → Pages → Source → GitHub Actions** once. Under **Settings → Environments → github-pages → Deployment branches and tags**, no changes are needed if deployments are unrestricted. If selected branches and tags are required, add a **Tag** rule matching `v*`; a branch rule for `main` does not allow version tags. If the environment does not exist yet, the first deployment creates it without restrictions. Commit and push all changes before tagging that commit. An ordinary branch push runs only `build`, with `release` and `pages` marked `skipped`; this is expected. This uses GitHub's [custom Pages workflow](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages). Release publishing and Pages deployment are separate jobs: a Pages configuration error does not block the ZIP release.
 
 Build locally with Python 3.10+ (no packages required):
 
@@ -39,7 +39,7 @@ python3 scripts/build.py
 python3 -m unittest discover -s tests -p 'test_*.py'
 ```
 
-Output is in ignored `dist/`: two ZIPs, `SHA256SUMS.txt`, `release-notes.md`, and the Pages tree in `site/`. Only the bundled `data/example.db` and `data/example.csv` are shipped; local databases, tests and `design.md` are excluded. The release manifest is checked to prevent publishing local database paths. The source itself still opens directly without a build step.
+Output is in ignored `dist/`: two ZIPs, `SHA256SUMS.txt`, and the Pages tree in `site/`. Only the bundled `data/example.db` and `data/example.csv` are shipped; local databases, tests, release notes and `design.md` are excluded. The release manifest is checked to prevent publishing local database paths. The source itself still opens directly without a build step.
 
 @vladaaar, 2026
 
