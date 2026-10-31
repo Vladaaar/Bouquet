@@ -430,10 +430,12 @@ test('language changes during an asynchronous read keep the same request and loc
       return { rows: [{ n: 1, cells: ['kept'] }], total: 1, hasMore: false };
     } }] }) });
   choose(); await until(() => release);
+  assert.match(decodeURIComponent(el('favicon').href), /⏳/);
   context.Bouquet.ui.setLanguage('language-en');
   assert.equal(signal.aborted, false);
   assert.equal(calls, 1);
   release(); await until(() => views.length);
+  assert.match(decodeURIComponent(el('favicon').href), /💐/);
   assert.equal(el('dataSummary').textContent, 'Found: 1 · Rows scanned: 128 · Total rows: 1');
   assert.equal(views[0].rows[0].cells[0], 'kept');
 });

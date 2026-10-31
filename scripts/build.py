@@ -104,7 +104,6 @@ def build(root, output, tag=None):
             if '<html lang="ru">' not in html:
                 raise ValueError('Expected <html lang="ru"> in source index.html')
             html = html.replace('<html lang="ru">', f'<html lang="{locale}">', 1)
-            html = html.replace('<title>💐 Bouquet</title>', f'<title>💐 Bouquet {version}</title>')
             html = html.replace('<meta charset="utf-8">', f'<meta charset="utf-8">\n<meta name="version" content="{version}">', 1)
             localized["index.html"] = html.encode()
             filename = f"bouquet-{version}-{locale}.zip"

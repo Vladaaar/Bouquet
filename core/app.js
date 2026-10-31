@@ -3,6 +3,9 @@
   const B = window.Bouquet, U = B.util, I = B.i18n;
   const $ = id => document.getElementById(id);
   const fileState = $('fileState');
+  const favicon = $('favicon');
+  const icons = Object.fromEntries(['💐', '⏳'].map(icon => [icon,
+    'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><text x="4" y="52" font-size="52">${icon}</text></svg>`)]));
   const form = $('searchForm'), q = $('q'), clear = $('clear');
   const stage = $('stage'), pager = $('pager'), pos = $('pos'), status = $('status'), summary = $('dataSummary');
   const S = {
@@ -341,6 +344,8 @@
     progressive.disabled = S.opening || !alternatives.some(m => m.loadingMode === 'memory') || !alternatives.some(m => m.loadingMode === 'progressive');
     I.bind($('loadingHint'), !S.interp?.loadingMode ? 'chooseSQLite' : 'modeHint');
     const busy = S.opening || S.reading;
+    const icon = busy ? '⏳' : '💐';
+    if (favicon.dataset.icon !== icon) { favicon.href = icons[icon]; favicon.dataset.icon = icon; }
     const ready = S.interp && (!S.interp.fallback || U.isText(S.bytes || new Uint8Array()));
     fileState.dataset.state = busy ? 'loading' : S.error || S.readError || (!S.fileName && !S.collection) ? 'stop' : S.location === 'files' ? 'go' : ready ? 'go' : 'wait';
   }

@@ -37,8 +37,10 @@ class DistributionTests(unittest.TestCase):
             html = files["index.html"].decode()
             self.assertIn(f'<html lang="{locale}">', html)
             self.assertIn(f'<meta name="version" content="{version}">', html)
+            self.assertIn('<title>Bouquet</title>', html)
+            self.assertIn('rel="icon" type="image/svg+xml" href="data:image/svg+xml,', html)
             for reference in re.findall(r'(?:src|href)="([^"]+)"', html):
-                if not reference.startswith(("https:", "#")):
+                if not reference.startswith(("https:", "#", "data:")):
                     self.assertIn(reference, files)
             for module in (ROOT / "modules").rglob("*.js"):
                 self.assertIn(module.relative_to(ROOT).as_posix(), files)
@@ -112,6 +114,7 @@ class DistributionTests(unittest.TestCase):
             doc.feed(html)
             self.assertEqual(doc.external, [])
             self.assertIn(f'<html data-standalone="true" lang="{locale}">', html)
+            self.assertIn('<title>Bouquet</title>', html)
             self.assertEqual(len(doc.sources), len(set(doc.sources)))
             self.assertEqual(set(doc.sources), {name for name in builder.payload(ROOT) if name.endswith('.js')})
             self.assertLess(doc.sources.index('modules/vendor/sheetjs-0.20.3/xlsx.full.min.js'), doc.sources.index('modules/excel.js'))
