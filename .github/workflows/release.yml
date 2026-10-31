@@ -45,6 +45,16 @@ jobs:
           if-no-files-found: error
       - uses: actions/upload-artifact@v7
         with:
+          name: release-mobile-ru
+          path: dist/bouquet-*-mobile-ru.html
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-mobile-en
+          path: dist/bouquet-*-mobile-en.html
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        with:
           name: release-checksums
           path: dist/SHA256SUMS.txt
           if-no-files-found: error
@@ -75,6 +85,8 @@ jobs:
           gh release create "$RELEASE_TAG" \
             "dist/bouquet-$release_version-ru.zip" \
             "dist/bouquet-$release_version-en.zip" \
+            "dist/bouquet-$release_version-mobile-ru.html" \
+            "dist/bouquet-$release_version-mobile-en.html" \
             dist/SHA256SUMS.txt \
             --verify-tag --title "Bouquet $RELEASE_TAG" --notes ""
 

@@ -51,7 +51,9 @@ python3 -m unittest discover -s tests -p 'test_*.py'
 python3 scripts/build.py
 ```
 
-`dist/` contains separate RU and EN ZIPs, `SHA256SUMS.txt` and the Pages tree in `site/`. Each ZIP includes all modules, documentation, dependencies with licences and the two demo files. Local databases, hidden files, tests, `design.md` and release notes are excluded.
+`dist/` contains separate RU and EN ZIPs, RU/EN single-file mobile HTML builds, `SHA256SUMS.txt` and the Pages tree in `site/`. Each ZIP includes all modules, documentation, dependencies with licences and the two demo files. Local databases, hidden files, tests, `design.md` and release notes are excluded.
+
+`bouquet-X.Y.Z-mobile-ru.html` and `bouquet-X.Y.Z-mobile-en.html` embed the CSS, core, all plugins (Hello is enabled), SheetJS and licence texts. They require no neighbouring files, and skip the manifest/demo scan. They also work on desktop browsers. Pages serves them at `/mobile.html` and `/en/mobile.html`; Actions exposes `release-mobile-ru` and `release-mobile-en` artifacts, and each release attaches both HTML files alongside the ZIPs. Validate mobile builds by copying just the HTML to an empty folder, disconnecting the network and opening local data files.
 
 For a release, update `VERSION`, `Bouquet.version` in `core/bouquet.js`, and the dated section in `CHANGELOG.md`. Use stable semantic versions `X.Y.Z`. Commit the changes and push the corresponding `vX.Y.Z` tag. Actions validates the version, tests and builds, publishes both ZIPs in one release, and deploys Pages (RU at the root, EN at `/en/`). Branch pushes only test and build. Release notes remain in the repository.
 

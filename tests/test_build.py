@@ -55,6 +55,10 @@ class DistributionTests(unittest.TestCase):
             site = self.output / "site" / ("en" if locale == "en" else "")
             for filename, data in files.items():
                 self.assertEqual((site / filename).read_bytes(), data)
+            mobile_name = f"bouquet-{version}-mobile-{locale}.html"
+            mobile = (self.output / mobile_name).read_bytes()
+            self.assertEqual(hashlib.sha256(mobile).hexdigest(), sums[mobile_name])
+            self.assertEqual((site / 'mobile.html').read_bytes(), mobile)
             # Execute the shipped scripts, using only Node built-ins, to verify the
             # actual initial language and that switching languages remains possible.
             subprocess.run(["node", "-e", """
@@ -75,17 +79,69 @@ class DistributionTests(unittest.TestCase):
             """, str(site), locale], check=True, capture_output=True)
         self.assertTrue((self.output / "site/.nojekyll").is_file())
         self.assertEqual({p.name for p in self.output.iterdir()}, {
-            f"bouquet-{version}-ru.zip", f"bouquet-{version}-en.zip", "SHA256SUMS.txt", "site"
+            f"bouquet-{version}-ru.zip", f"bouquet-{version}-en.zip",
+            f"bouquet-{version}-mobile-ru.html", f"bouquet-{version}-mobile-en.html",
+            "SHA256SUMS.txt", "site"
         })
         self.assertFalse((self.output / "site/CHANGELOG.md").exists())
+
+    def test_mobile_is_self_contained_and_inline_scripts_remain_valid(self):
+        from html.parser import HTMLParser
+
+        class Document(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.external = []
+                self.sources = []
+
+            def handle_starttag(self, tag, attrs):
+                attrs = dict(attrs)
+                if tag == 'script':
+                    if attrs.get('src'):
+                        self.external.append(attrs['src'])
+                    if attrs.get('data-bouquet-source'):
+                        self.sources.append(attrs['data-bouquet-source'])
+                if tag == 'link' and attrs.get('rel') == 'stylesheet':
+                    self.external.append(attrs.get('href'))
+
+        version = builder.build(ROOT, self.output)
+        for locale in ('ru', 'en'):
+            path = self.output / f'bouquet-{version}-mobile-{locale}.html'
+            html = path.read_text(encoding='utf-8')
+            doc = Document()
+            doc.feed(html)
+            self.assertEqual(doc.external, [])
+            self.assertIn(f'<html data-standalone="true" lang="{locale}">', html)
+            self.assertEqual(len(doc.sources), len(set(doc.sources)))
+            self.assertEqual(set(doc.sources), {name for name in builder.payload(ROOT) if name.endswith('.js')})
+            self.assertLess(doc.sources.index('modules/vendor/sheetjs-0.20.3/xlsx.full.min.js'), doc.sources.index('modules/excel.js'))
+            self.assertLess(doc.sources.index('modules/hello.js'), doc.sources.index('core/ui.js'))
+            licenses = re.search(r'<script type="application/json" id="bouquet-licenses">(.*?)</script>', html, re.S)
+            self.assertEqual(json.loads(licenses[1])['modules/vendor/sheetjs-0.20.3/LICENSE'], (ROOT / 'modules/vendor/sheetjs-0.20.3/LICENSE').read_text())
+            subprocess.run(['node', '-e', r'''
+              const fs = require('node:fs'), vm = require('node:vm');
+              const html = fs.readFileSync(process.argv[1], 'utf8');
+              for (const [, attrs, source] of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)) {
+                if (!attrs.includes('application/json')) new vm.Script(source);
+              }
+            ''', str(path)], check=True, capture_output=True)
+
+    def test_mobile_escapes_script_terminators(self):
+        files = builder.payload(ROOT)
+        files['modules/hello.js'] += b'\nconst testTerminator = "</script><p>injected</p>";\n'
+        mobile = builder.standalone(files['index.html'].decode(), files)
+        self.assertIn(r'"<\/script><p>injected</p>"', mobile)
+        self.assertNotIn('"</script><p>injected</p>"', mobile)
 
     def test_reproducible_and_cleans_stale_pages_files(self):
         version = builder.build(ROOT, self.output)
         first = (self.output / f"bouquet-{version}-en.zip").read_bytes()
+        mobile = (self.output / f"bouquet-{version}-mobile-en.html").read_bytes()
         (self.output / "site/obsolete.js").touch()
         (self.output / "release-notes.md").write_text("Obsolete generated notes")
         builder.build(ROOT, self.output, "v" + version)
         self.assertEqual(first, (self.output / f"bouquet-{version}-en.zip").read_bytes())
+        self.assertEqual(mobile, (self.output / f"bouquet-{version}-mobile-en.html").read_bytes())
         self.assertFalse((self.output / "site/obsolete.js").exists())
         self.assertFalse((self.output / "release-notes.md").exists())
 

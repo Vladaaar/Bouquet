@@ -406,6 +406,8 @@
     if (S.summaryView) paintSummary(S.summaryView);
   });
   async function scanFolder() {
+    // One-file mobile copies have no neighbouring manifest or demo files.
+    if (document.documentElement?.hasAttribute?.('data-standalone')) return;
     const version = selectionVersion;
     try {
       const response = await fetch('bouquet.files.json', { cache: 'no-store' });

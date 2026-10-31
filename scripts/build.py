@@ -58,6 +58,36 @@ def archive(path, prefix, files):
             output.writestr(info, data)
 
 
+def standalone(html, files):
+    """Inline the complete app, including optional plugins and local dependencies."""
+    def inline_script(name):
+        # HTML raw-text elements end at </script even inside JS string literals.
+        source = re.sub(r"</script", lambda m: "<\\/" + m[0][2:], files[name].decode(), flags=re.I)
+        return f'<script data-bouquet-source="{name}">\n{source}\n</script>'
+
+    scripts = re.findall(r'<script src="([^"]+)"></script>', html)
+    dependencies = sorted(name for name in files if name.startswith("modules/vendor/") and name.endswith(".js"))
+    optional = sorted(name for name in files if name.startswith("modules/") and name.endswith(".js")
+                      and name not in scripts and name not in dependencies)
+    html = html.replace('<html ', '<html data-standalone="true" ', 1)
+    html = re.sub(r'<link rel="stylesheet" href="([^"]+)">',
+                  lambda m: '<style>\n' + re.sub(r"</style", r"<\\/style", files[m[1]].decode(), flags=re.I) + '\n</style>', html)
+    first_module = next(name for name in scripts if name.startswith("modules/"))
+
+    def replace_script(match):
+        name = match[1]
+        extra = dependencies if name == first_module else optional if name == "core/ui.js" else []
+        return '\n'.join(inline_script(path) for path in [*extra, name])
+
+    html = re.sub(r'<script src="([^"]+)"></script>', replace_script, html)
+    # Preserve the application and third-party licence texts in the one-file copy.
+    licenses = {name: data.decode() for name, data in files.items() if name == "LICENSE" or name.startswith("modules/vendor/") and name.endswith("/LICENSE")}
+    notices = json.dumps(licenses, ensure_ascii=False).replace('<', '\\u003c')
+    # Vendor code can itself contain an HTML exporter with a literal </body>.
+    head, closing, tail = html.rpartition('</body>')
+    return head + f'<script type="application/json" id="bouquet-licenses">{notices}</script>\n' + closing + tail
+
+
 def build(root, output, tag=None):
     version = metadata(root, tag)
     files = payload(root)
@@ -80,11 +110,16 @@ def build(root, output, tag=None):
             filename = f"bouquet-{version}-{locale}.zip"
             archive(output / filename, f"bouquet-{version}-{locale}", localized)
             checksums.append(f"{hashlib.sha256((output / filename).read_bytes()).hexdigest()}  {filename}\n")
+            mobile = standalone(html, files).encode()
+            mobile_name = f"bouquet-{version}-mobile-{locale}.html"
+            (output / mobile_name).write_bytes(mobile)
+            checksums.append(f"{hashlib.sha256(mobile).hexdigest()}  {mobile_name}\n")
             target = site if locale == "ru" else site / "en"
             for name, data in localized.items():
                 destination = target / name
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 destination.write_bytes(data)
+            (target / "mobile.html").write_bytes(mobile)
         (site / ".nojekyll").touch()
         # Replace only our generated Pages tree; old modules must not survive a rebuild.
         if (output / "site").exists():
