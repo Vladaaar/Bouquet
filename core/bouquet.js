@@ -4,7 +4,7 @@
 (function () {
   const listeners = {};
   const CORE = {
-    version: '1.2.0',
+    version: '1.2.1',
     plugins: [],
     interpreters: [],
     renderers: [],

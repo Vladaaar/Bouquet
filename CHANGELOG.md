@@ -1,5 +1,21 @@
 # Release notes / История изменений
 
+## [1.2.1] - 2026-10-31
+
+### Русский
+
+- Добавлены однофайловые HTML-сборки RU/EN для телефонов: стили, все плагины и библиотека Excel встроены внутрь, соседние файлы не нужны.
+- Строка статуса показывает только найденное, просмотренное и известный итог; прогресс обновляется и при отсутствии совпадений.
+- Добавлен пример плагина Hello; сокращены README, подробные инструкции перенесены в `docs/`.
+- Добавлен фавикон 💐, меняющийся на ⏳ во время чтения. Название вкладки — Bouquet, без эмодзи и номера версии.
+
+### English
+
+- Added self-contained RU/EN mobile HTML builds with embedded styles, all plugins and the Excel library; no neighbouring files required.
+- The status row shows only found, scanned and known total counts; progress updates even when there are no matches.
+- Added the Hello example plugin; shortened both READMEs and moved detailed instructions to `docs/`.
+- Added a 💐 favicon that changes to ⏳ while reading. The tab title is Bouquet, without an emoji or version number.
+
 ## [1.2.0] - 2026-10-30
 
 ### Русский
