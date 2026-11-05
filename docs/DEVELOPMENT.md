@@ -39,6 +39,18 @@ Search supports words, `"exact phrases"`, `-exclusions` and `column:value`. Ente
 - CronosPro: choose CroStru and CroBank DAT/TAD pairs together; CroIndex is optional. Components are grouped by directory. If automatic KOD recovery fails, the dialog accepts a KOD table, not a regular password.
 - CSV, TSV and text: currently parsed fully in memory.
 
+## Plugin groups and appearance
+
+Settings groups languages, themes and file formats (shared `format`, e.g. `sqlite`). Groups with alternatives show exclusive switches: one choice stays on. Single plugins and group-settings plugins are listed under **Other plugins** at the bottom. Group controls stay below their heading, including when there is only one candidate.
+
+The default `theme-default` plugin contains `states.light` and `states.dark` CSS. The separate `theme-settings` plugin adds **Appearance: System / Light / Dark**. System is the default and follows browser/OS changes; the other modes override it. Theme choice and appearance are independent and preserve data and DOM. Existing CSS-only themes still load, but need both states to fully support Appearance.
+
+`ui.selectPlugin(group, id)` / `Bouquet.selectPlugin(group, id)` selects `language`, `theme` or `format:<format>`. Without a manual format choice the existing compatibility/priority/SQLite size rules apply; the switch reflects the current reader. A manual choice persists for the page session. Select `null` for a format group to return to automatic selection. Changing the current reader preserves the query/table and resets pagination. `ui.setPluginOptions(id, patch)` merges `plugin.options`; readers consume their own parameters. Changing an active reader's options reopens it; inactive-reader changes do not.
+
+Group-settings plugins use `kind: 'plugin', category: 'settings', targetGroup: 'theme'` (or a format group). In `setup(ui)`, call `ui.addGroupSettings({group, label, mount})`. The block mounts once and survives language/theme changes. Use `ui.selectPlugin` and `ui.setPluginOptions` to control group members. `targetGroup` documents the target; mounting is explicit. See [theme_settings.js](../modules/theme_settings.js), [sqlite_settings.js](../modules/sqlite_settings.js) and the [full example](DEVELOPMENT_RU.md#группы-и-плагины-настроек).
+
+Events: `plugin:select` carries `{group, id}`, `plugin:configure` carries `{plugin, options}`, `appearance:change` carries `{mode}`. `ui.setTheme(id)` and `ui.setAppearance(mode)` also work directly. All choices are in memory until reload. Selection controls parsing/CSS; it does not undo arbitrary JavaScript or `setup` effects from already loaded trusted plugins.
+
 ## Create a plugin
 
 Load [modules/hello.js](../modules/hello.js) through **Settings → Plugins → Add .js plugin**. Open **👋 Hello** in Settings. The example is not enabled by default and can be edited as a starting point.

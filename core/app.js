@@ -107,7 +107,7 @@
   }
   function resetPages() { S.page = 0; S.cursors = [null]; S.total = undefined; S.matches = undefined; S.summaryView = null; }
   const choose = (list, value) => list.filter(m => {
-    try { return m.test(value); } catch { return false; }
+    try { return B.pluginEnabled(m) && m.test(value); } catch { return false; }
   }).sort((a, b) => (b.priority || 0) - (a.priority || 0))[0];
 
   async function openSource(load, name, { preserve = false, mode, label = preserve ? S.fileLabel : name, fileKey = preserve ? S.fileKey : 'file-' + ++fileId, overview = false, table, query } = {}) {
@@ -430,10 +430,19 @@
   }
   progressive.onchange = () => {
     if (progressive.disabled || !S.source) return;
+    const group = B.pluginGroup(S.interp);
+    if (B.selectedPlugins[group]) {
+      const plugin = B.groupPlugins(group).find(plugin => plugin.loadingMode === (progressive.checked ? 'progressive' : 'memory'));
+      if (plugin) return B.selectPlugin(group, plugin.id);
+    }
     const source = S.source;
     openSource(() => source, S.fileName, { preserve: true, mode: progressive.checked ? 'progressive' : 'memory' });
   };
   function paintFileState() {
+    if (S.interp) {
+      const group = B.pluginGroup(S.interp);
+      if (group && B.activeGroups[group] !== S.interp.id) { B.activeGroups[group] = S.interp.id; B.emit('plugin:active', { group, id: S.interp.id }); }
+    }
     fileState.hidden = S.location !== 'data';
     I.bind($('interpreterInfo'), S.interp ? 'interpreter' : 'noInterpreter', { name: () => I.label(S.interp) });
     progressive.checked = S.loadingMode === 'progressive';
@@ -503,6 +512,16 @@
     }
   });
   B.on('tab:change', paintHeader);
+  function refreshGroup(group) {
+    if (S.collection && S.location === 'files') {
+      S.collection.items = U.groupFileEntries(S.collection.entries); paint(); return;
+    }
+    if (!S.source || B.pluginGroup(S.interp) !== group) return;
+    const source = S.source;
+    openSource(() => source, S.fileName, { preserve: true });
+  }
+  B.on('plugin:select', ({ group }) => refreshGroup(group));
+  B.on('plugin:configure', ({ plugin }) => { if (plugin.id === S.interp?.id) refreshGroup(B.pluginGroup(plugin)); });
   B.on('language:change', () => {
     paintHeader(); paintFileState();
     if (S.summaryView) paintSummary(S.summaryView);

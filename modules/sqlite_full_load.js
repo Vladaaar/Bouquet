@@ -7,6 +7,7 @@
     kind: 'interpreter',
     id: 'sqlite-full',
     format: 'sqlite', loadingMode: 'memory',
+    names: { ru: 'SQLite — загрузка в память', en: 'SQLite — in-memory reading' },
     name: 'SQLite',
     priority: 30,
 

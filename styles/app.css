@@ -66,6 +66,14 @@ h1{font-size:28px;margin:0 0 12px}h2{font-size:18px;margin:0 0 14px}
 .plugin-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:12px;margin-top:24px}
 .plugin-card,.settings-card{padding:20px;border:1px solid var(--line);border-radius:var(--r-box);background:var(--surface)}
 .plugin-card small{display:block;color:var(--muted);margin:6px 0 14px}
+.plugin-switch{appearance:none;width:42px;height:24px;border-radius:20px;background:var(--muted);cursor:pointer;position:relative;vertical-align:middle}
+.plugin-switch::before{content:'';position:absolute;top:3px;left:3px;width:18px;height:18px;background:var(--surface);border-radius:50%}
+.plugin-switch:checked{background:var(--iris)}.plugin-switch:checked::before{left:21px}.plugin-switch:disabled{opacity:1;cursor:default}
+.group-settings{margin:16px 0}.appearance-control{border:0;padding:0;display:flex;flex-wrap:wrap;gap:0}
+.appearance-control legend{margin-bottom:10px;font-weight:550}.appearance-control label{position:relative;cursor:pointer}
+.appearance-control input{position:absolute;opacity:0}.appearance-control span{display:block;padding:9px 16px;border:1px solid var(--line);background:var(--surface)}
+.appearance-control label:first-of-type span{border-radius:var(--r-pill) 0 0 var(--r-pill)}.appearance-control label:last-of-type span{border-radius:0 var(--r-pill) var(--r-pill) 0}
+.appearance-control input:checked+span{background:var(--iris);color:#fff}.appearance-control input:focus-visible+span{outline:2px solid var(--iris);outline-offset:3px}
 .settings-card{max-width:680px;margin-top:20px}
 .settings-section{margin-top:32px}
 .settings-section>p{color:var(--muted)}

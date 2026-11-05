@@ -4,6 +4,10 @@
   I.translate();
   const $ = id => document.getElementById(id);
   const tabs = new Map(), mounted = new Set();
+  const groups = new Map([
+    ['language', { section: $('languagesPanel'), list: $('languageList'), settings: $('languageSettings') }],
+    ['theme', { section: $('themesPanel'), list: $('themeList'), settings: $('themeSettings') }]
+  ]);
   let started = false;
   const themeStyle = document.createElement('style');
   themeStyle.id = 'bouquet-theme';
@@ -56,15 +60,29 @@
       }
       B.emit('tab:change', { id });
     },
+    appearance: 'system',
     setTheme(id) {
       const plugin = B.plugins.find(p => p.id === id && p.category === 'theme');
       if (!plugin) throw I.error('Тема не подключена: {id}', { id });
-      themeStyle.textContent = plugin.css || '';
       UI.theme = id;
+      applyTheme();
       paintPlugins();
       B.emit('theme:change', { id });
     },
     get language() { return I.language; },
+    setAppearance(mode) {
+      if (!['system', 'light', 'dark'].includes(mode)) throw new Error('Unknown appearance: ' + mode);
+      UI.appearance = mode; applyTheme(); B.emit('appearance:change', { mode });
+    },
+    selectPlugin(group, id) { B.selectPlugin(group, id); },
+    setPluginOptions(id, options) { B.setPluginOptions(id, options); },
+    addGroupSettings({ group, label, mount }) {
+      const target = ensureGroup(group, label);
+      const panel = document.createElement('div'); panel.className = 'group-settings';
+      target.settings.appendChild(panel);
+      mount(panel, UI); paintPlugins();
+      return panel;
+    },
     setLanguage(id) { I.setLanguage(id); },
     start() {
       if (started) return;
@@ -76,6 +94,24 @@
       B.emit('ui:ready', UI);
     }
   };
+  const darkMedia = globalThis.matchMedia?.('(prefers-color-scheme: dark)');
+  function applyTheme() {
+    const plugin = B.plugins.find(plugin => plugin.id === UI.theme);
+    const state = UI.appearance === 'system' ? darkMedia?.matches ? 'dark' : 'light' : UI.appearance;
+    themeStyle.textContent = (plugin?.css || '') + (plugin?.states?.[state] || '');
+  }
+  darkMedia?.addEventListener('change', () => { if (UI.appearance === 'system') applyTheme(); });
+  function ensureGroup(group, label) {
+    if (!groups.has(group)) {
+      const section = document.createElement('section'); section.className = 'settings-section'; section.dataset.group = group;
+      const title = document.createElement('h2'); title.textContent = label || group.replace(/^format:/, '');
+      const settings = document.createElement('div'), list = document.createElement('div'); list.className = 'plugin-list';
+      section.appendChild(title); section.appendChild(settings); section.appendChild(list); $('formatGroups').appendChild(section);
+      groups.set(group, { section, list, settings, title });
+    }
+    if (label && groups.get(group).title) groups.get(group).title.textContent = label;
+    return groups.get(group);
+  }
   UI.addTab({ id: 'explorer', label: I.t('home'), labelKey: 'home', panel: $('explorerPanel'), button: $('homeButton') });
   UI.addTab({ id: 'settings', label: I.t('settings'), labelKey: 'settings', panel: $('settingsPanel'), button: $('settingsButton') });
   function mountPlugin(plugin) {
@@ -85,25 +121,37 @@
     catch (error) { plugin.uiError = error.message; }
   }
   function paintPlugins() {
-    for (const id of ['pluginList', 'languageList', 'themeList']) $(id).replaceChildren();
+    $('pluginList').replaceChildren();
+    for (const plugin of B.plugins) {
+      const group = B.pluginGroup(plugin);
+      if (group && B.groupPlugins(group).length > 1) ensureGroup(group);
+    }
+    for (const [group, target] of groups) {
+      target.list.replaceChildren();
+      target.section.hidden = B.groupPlugins(group).length < 2 && !target.settings.children.length;
+    }
     for (const plugin of B.plugins) {
       const theme = plugin.category === 'theme', language = plugin.category === 'language';
+      const group = B.pluginGroup(plugin), selectable = group && B.groupPlugins(group).length > 1;
       const card = document.createElement('article'); card.className = 'plugin-card';
       card.dataset.plugin = plugin.id;
       const title = document.createElement('strong'); title.textContent = I.label(plugin);
       const detail = document.createElement('small');
       detail.textContent = plugin.uiError ? I.t('uiError', { error: plugin.uiError }) :
-        I.t(theme ? 'kind.theme' : language ? 'kind.language' : 'kind.' + plugin.kind) + ' · ' + plugin.id;
+        I.t(plugin.category === 'settings' ? 'kind.settings' : theme ? 'kind.theme' : language ? 'kind.language' : 'kind.' + plugin.kind) + ' · ' + plugin.id;
       card.appendChild(title); card.appendChild(detail);
-      if (theme || language) {
-        const button = document.createElement('button'); button.className = 'theme-button';
-        const selected = plugin.id === (theme ? UI.theme : I.language);
-        button.textContent = I.t(selected ? language ? 'selectedLanguage' : 'selected' : 'apply');
-        button.disabled = selected; button.setAttribute('aria-pressed', String(selected));
-        button.onclick = () => theme ? UI.setTheme(plugin.id) : UI.setLanguage(plugin.id);
+      if (selectable) {
+        const button = document.createElement('input'); button.type = 'checkbox'; button.className = 'plugin-switch';
+        const selected = plugin.id === B.activePlugin(group);
+        button.checked = selected;
+        button.setAttribute('role', 'switch'); button.setAttribute('aria-label', I.label(plugin)); button.setAttribute('aria-checked', String(selected));
+        button.onclick = () => {
+          button.checked = true;
+          if (!selected || group.startsWith('format:') && B.selectedPlugins[group] !== plugin.id) UI.selectPlugin(group, plugin.id);
+        };
         card.appendChild(button);
       }
-      $(theme ? 'themeList' : language ? 'languageList' : 'pluginList').appendChild(card);
+      (selectable ? groups.get(group).list : $('pluginList')).appendChild(card);
     }
   }
   B.on('language:change', () => {
@@ -123,4 +171,6 @@
       else paintPlugins();
     }
   });
+  B.on('plugin:select', paintPlugins);
+  B.on('plugin:active', paintPlugins);
 })();

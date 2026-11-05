@@ -15,7 +15,7 @@ To use offline, download `bouquet-X.Y.Z-en.zip` or `bouquet-X.Y.Z-ru.zip`, extra
 - Read large SQLite databases progressively.
 - Switch languages and themes, or load JavaScript plugins in Settings.
 
-Want to create a plugin? Start with [hello.js](modules/hello.js): load it through **Settings → Plugins → Add .js plugin**, then open **👋 Hello** in Settings. It adds a small section, reacts to language changes and returns to the current file without resetting it. The example is included but is only enabled automatically in the mobile build.
+Want to create a plugin? Start with [hello.js](modules/hello.js): load it through **Settings → Other plugins → Add .js plugin**, then open **👋 Hello** in Settings. It adds a small section, reacts to language changes and returns to the current file without resetting it. The example is included but is only enabled automatically in the mobile build.
 
 [Documentation: local server, formats, plugins and releases](docs/DEVELOPMENT.md) · [Detailed plugin API (Russian)](docs/DEVELOPMENT_RU.md#api-плагинов-версия-12)
 

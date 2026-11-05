@@ -51,27 +51,27 @@
     <section class="settings-section" id="languagesPanel">
       <h2 data-i18n="languageHeading">🌐 Язык</h2>
       <p data-i18n="languageHint">Языковые пакеты переводят интерфейс. Другие языки можно подключить плагином .js.</p>
+      <div id="languageSettings"></div>
       <div class="plugin-list" id="languageList"></div>
     </section>
+    <section class="settings-section" id="themesPanel">
+      <h2 data-i18n="themesHeading">🎨 Темы оформления</h2>
+      <div id="themeSettings"></div>
+      <div class="plugin-list" id="themeList"></div>
+    </section>
+    <div id="formatGroups"></div>
     <section class="settings-section" id="pluginsPanel">
-      <h2 data-i18n="pluginsHeading">🔌 Плагины</h2>
+      <h2 data-i18n="pluginsHeading">🔌 Прочие плагины</h2>
       <p data-i18n="pluginHint">Форматы, поиск и интерфейс подключаются плагинами.</p>
       <button class="action-button" id="addPlugin" data-i18n="addPlugin">Подключить плагин .js</button>
       <p id="pluginStatus" role="status" aria-live="polite"></p>
       <div class="plugin-list" id="pluginList"></div>
     </section>
-    <section class="settings-section" id="themesPanel">
-      <h2 data-i18n="themesHeading">🎨 Темы оформления</h2>
-      <div class="plugin-list" id="themeList"></div>
-    </section>
-    <section class="settings-section">
-      <h2 data-i18n="readingHeading">⏬ Чтение файлов</h2>
-      <div class="settings-card">
-        <p id="interpreterInfo">Интерпретатор не выбран</p>
-        <label><input id="progressive" type="checkbox" disabled> <span data-i18n="progressive">Прогрессивная загрузка</span></label>
-        <p id="loadingHint">Выберите SQLite-файл</p>
-      </div>
-    </section>
+    <div class="settings-card" id="readingSettings" hidden>
+      <p id="interpreterInfo">Интерпретатор не выбран</p>
+      <label><input id="progressive" type="checkbox" disabled> <span data-i18n="progressive">Прогрессивная загрузка</span></label>
+      <p id="loadingHint">Выберите SQLite-файл</p>
+    </div>
     <footer class="sign"><a href="https://unit.link/vladaaar">@vladaaar, 2026</a></footer>
   </section>
   </main>
@@ -98,6 +98,8 @@
 <script src="modules/links.js"></script>
 
 <script src="modules/themes.js"></script>
+<script src="modules/theme_settings.js"></script>
+<script src="modules/sqlite_settings.js"></script>
 <script src="core/ui.js"></script>
 <script src="core/app.js"></script>
 </body>

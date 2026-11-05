@@ -9,6 +9,38 @@
     interpreters: [],
     renderers: [],
     features: {},
+    selectedPlugins: {},
+    activeGroups: {},
+    pluginGroup(plugin) {
+      if (plugin.category === 'settings') return null;
+      if (['language', 'theme'].includes(plugin.category)) return plugin.category;
+      return plugin.kind === 'interpreter' ? 'format:' + (plugin.format || plugin.id) : null;
+    },
+    groupPlugins(group) { return CORE.plugins.filter(plugin => CORE.pluginGroup(plugin) === group).sort((a, b) => (b.priority || 0) - (a.priority || 0)); },
+    activePlugin(group) {
+      return group === 'language' ? CORE.i18n?.language : group === 'theme' ? CORE.ui?.theme :
+        CORE.selectedPlugins[group] || CORE.activeGroups[group] || CORE.groupPlugins(group)[0]?.id;
+    },
+    pluginEnabled(plugin) {
+      const group = CORE.pluginGroup(plugin);
+      if (group === 'language' || group === 'theme') return CORE.activePlugin(group) === plugin.id;
+      const selected = CORE.selectedPlugins[group];
+      return !selected || selected === plugin.id;
+    },
+    selectPlugin(group, id) {
+      if (id != null && !CORE.groupPlugins(group).some(plugin => plugin.id === id)) throw new Error('Plugin does not belong to group: ' + group);
+      if (group === 'language') return CORE.i18n.setLanguage(id);
+      if (group === 'theme') return CORE.ui.setTheme(id);
+      if (id == null) delete CORE.selectedPlugins[group];
+      else CORE.selectedPlugins[group] = id;
+      CORE.emit('plugin:select', { group, id });
+    },
+    setPluginOptions(id, options) {
+      const plugin = CORE.plugins.find(plugin => plugin.id === id);
+      if (!plugin) throw new Error('Unknown plugin: ' + id);
+      plugin.options = { ...plugin.options, ...options };
+      CORE.emit('plugin:configure', { plugin, options: plugin.options });
+    },
 
     register(mod) {
       if (!mod || !mod.id || !mod.kind) throw (CORE.i18n?.error('Модулю нужны id и kind') || new Error('Модулю нужны id и kind'));

@@ -3,7 +3,7 @@
   const U = Bouquet.util;
   // Keep raw entries for companion lookup; grouping only builds the visible list.
   U.groupFileEntries = entries => Bouquet.interpreters
-    .filter(plugin => typeof plugin.groupFiles === 'function')
+    .filter(plugin => Bouquet.pluginEnabled(plugin) && typeof plugin.groupFiles === 'function')
     .sort((a, b) => (b.priority || 0) - (a.priority || 0))
     .reduce((items, plugin) => plugin.groupFiles(items), entries)
     .slice().sort((a, b) => (a.label || a.name).localeCompare(b.label || b.name, Bouquet.i18n.locale, { numeric: true }));

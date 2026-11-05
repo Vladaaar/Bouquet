@@ -13,7 +13,7 @@ async function until(predicate) {
   for (let i = 0; i < 200; i++) { if (predicate()) return; await delay(5); }
   throw new Error('Timed out');
 }
-function setup({ fetch = async () => ({ ok: false }), withSearch = true, withHistory = false } = {}) {
+function setup({ fetch = async () => ({ ok: false }), withSearch = true, withHistory = false, dark = false } = {}) {
   class Element {
     constructor() { this.children = []; this.dataset = {}; this.value = ''; this.hidden = false; this.disabled = false; this.textContent = ''; this.className = ''; this.attrs = {};
       this.classList = { contains: value => this.className.split(' ').includes(value), toggle() {}, add() {}, remove() {} }; }
@@ -27,6 +27,8 @@ function setup({ fetch = async () => ({ ok: false }), withSearch = true, withHis
   const el = id => { if (!elements.has(id)) elements.set(id, new Element()); return elements.get(id); };
   el('settingsTabs').hidden = true;
   const body = new Element();
+  let mediaChange;
+  const media = { matches: dark, addEventListener: (_, callback) => { mediaChange = callback; } };
   const listeners = new Map(), entries = [null]; let historyIndex = 0;
   const history = {
     get state() { return entries[historyIndex]; },
@@ -38,12 +40,12 @@ function setup({ fetch = async () => ({ ok: false }), withSearch = true, withHis
   };
   const context = vm.createContext({ console, Blob, TextDecoder, TextEncoder, Uint8Array, ArrayBuffer, DataView, DOMException, AbortController, setTimeout, clearTimeout,
     document: { body, head: new Element(), querySelector: () => el('bar'), getElementById: el, createElement: () => new Element() },
-    ...(withHistory ? { history } : {}), addEventListener: (type, callback) => listeners.set(type, callback), scrollTo() {}, fetch });
+    ...(withHistory ? { history } : {}), matchMedia: () => media, addEventListener: (type, callback) => listeners.set(type, callback), scrollTo() {}, fetch });
   context.window = context;
   for (const f of ['core/bouquet.js', 'core/i18n.js', 'core/sources.js', 'core/files.js', 'core/navigation.js', ...(withSearch ? ['modules/search.js'] : [])]) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), context);
   const views = [];
   context.Bouquet.register({ kind: 'renderer', id: 'capture', priority: 100, test: () => true, render: (_, view) => views.push(view) });
-  for (const f of ['modules/themes.js', 'core/ui.js', 'core/app.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), context);
+  for (const f of ['modules/themes.js', 'modules/theme_settings.js', 'modules/sqlite_settings.js', 'core/ui.js', 'core/app.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), context);
   const choose = (name = 'test.lazy', size) => {
     const file = Object.assign(new Blob(['data']), { name });
     if (size != null) Object.defineProperty(file, 'size', { value: size });
@@ -51,7 +53,7 @@ function setup({ fetch = async () => ({ ok: false }), withSearch = true, withHis
   };
   const select = i => el('stage').children[0].children[1].children[i].children[0].click();
   const submit = () => el('searchForm').onsubmit({ preventDefault() {} });
-  return { el, context, views, choose, submit, select, history };
+  return { el, context, views, choose, submit, select, history, systemTheme(value) { media.matches = value; mediaChange?.(); } };
 }
 test('async UI pagination, table reset, progress, cancellation and latest-query wins', async () => {
   const { el, context, views, choose, submit, select } = setup();
@@ -189,7 +191,7 @@ test('plugins extend the live interface and theme loading preserves the current 
   ui.setTheme('custom-theme');
   assert.equal(ui.theme, 'custom-theme');
   const themeCard = el('themeList').children.find(card => card.dataset.plugin === 'custom-theme');
-  assert.equal(themeCard.children[2].disabled, true);
+  assert.equal(themeCard.children[2].checked, true);
   assert.equal(el('pluginList').children.some(card => card.dataset.plugin === 'custom-theme'), false);
   assert.equal(views.length, count);
   assert.equal(ui.activeTab, 'extra');
@@ -428,8 +430,9 @@ test('language cards preserve data, pagination, query, scroll and renderer DOM',
   assert.match(el('dataSummary').textContent, /Найдено: 220.*Просмотрено строк: 220.*Всего строк: 220/);
   assert.equal(views.length, count);
   assert.equal(el('languageList').children.length, 2);
-  assert.equal(el('themeList').children.length, 3);
-  assert.equal(el('pluginList').children.some(card => ['language', 'theme'].includes(B.plugins.find(plugin => plugin.id === card.dataset.plugin)?.category)), false);
+  assert.equal(el('themeList').children.length, 0);
+  assert.equal(el('pluginList').children.some(card => B.plugins.find(plugin => plugin.id === card.dataset.plugin)?.category === 'language'), false);
+  assert.equal(el('pluginList').children.some(card => card.dataset.plugin === 'theme-default'), true);
 });
 
 test('language changes during an asynchronous read keep the same request and localize the result', async () => {
@@ -659,4 +662,52 @@ test('a grouped Cronos database in a child folder keeps all directory parents', 
   el('backLevel').click();assert.equal(pathLabel(el),'root / child');
   assert.equal(el('stage').children[0].children[1].children[0].children[0].textContent,'Bank');
   el('backLevel').click();assert.equal(pathLabel(el),'root');
+});
+
+test('format alternatives are exclusive, preserve query/table, and settings plugins can configure them', async () => {
+  const {el,context,choose,views,select,submit}=setup();
+  const B=context.Bouquet,opened=[];
+  for (const id of ['first','second']) B.register({id,kind:'interpreter',format:'example',priority:id==='first'?100:90,test:()=>true,
+    open(){opened.push(id);return {tables:['a','b'].map(name=>({name,columns:['value'],rows:[['value '+(B.plugins.find(p=>p.id===id).options?.suffix||id)]]}))};}});
+  choose();await until(()=>el('stage').children.length);select(1);await until(()=>views.length);
+  el('q').value='value';submit();await until(()=>views.at(-1).query==='value');
+  B.selectPlugin('format:example','second');await until(()=>opened.at(-1)==='second' && views.at(-1).rows[0].cells[0]==='value second');
+  assert.equal(views.at(-1).query,'value');assert.equal(views.at(-1).table.name,'b');
+  assert.equal(B.pluginEnabled(B.plugins.find(p=>p.id==='first')),false);
+  assert.equal(B.activePlugin('format:example'),'second');
+  const count=opened.length;
+  B.setPluginOptions('first',{suffix:'inactive'});assert.equal(opened.length,count);
+  B.exec(`Bouquet.register({id:'example-settings',kind:'plugin',category:'settings',targetGroup:'format:example',
+    setup(ui){ui.addGroupSettings({group:'format:example',mount(panel){const button=document.createElement('button');
+      button.textContent='Configure';button.onclick=()=>ui.setPluginOptions('second',{suffix:'configured'});panel.appendChild(button);}});}});`,'example-settings.js');
+  const group=el('formatGroups').children.find(node=>node.dataset.group==='format:example');
+  const controls=group.children[1].children[0];controls.children[0].click();
+  await until(()=>views.at(-1).rows[0].cells[0]==='value configured');
+  assert.equal(el('pluginList').children.some(card=>card.dataset.plugin==='example-settings'),true);
+  assert.equal(el('pluginList').children.some(card=>['first','second'].includes(card.dataset.plugin)),false);
+  assert.equal(group.children[2].children.filter(card=>card.children[2].checked).length,1);
+  B.ui.setLanguage('language-en');assert.equal(group.children[1].children[0],controls);
+  choose('another.db');await until(()=>opened.length===count+2);
+  assert.equal(opened.at(-1),'second');
+});
+
+test('appearance follows OS only in System and leaves the current data untouched', async () => {
+  const {el,context,choose,views,systemTheme}=setup({dark:true});
+  const B=context.Bouquet,ui=B.ui;
+  const style=context.document.head.children.find(node=>node.id==='bouquet-theme');
+  assert.equal(ui.appearance,'system');assert.equal(ui.theme,'theme-default');assert.match(style.textContent,/#131519/);
+  const control=el('themeSettings').children[0];
+  choose('data.txt');await until(()=>views.length);const view=ui.currentView;
+  ui.setAppearance('light');assert.match(style.textContent,/#ede7d8/);
+  systemTheme(false);systemTheme(true);assert.match(style.textContent,/#ede7d8/);
+  ui.setAppearance('system');assert.match(style.textContent,/#131519/);
+  systemTheme(false);assert.match(style.textContent,/#ede7d8/);
+  B.register({id:'theme-alternative',kind:'plugin',category:'theme',name:'Alternative',states:{light:':root{--iris:red}',dark:':root{--iris:blue}'}});
+  ui.selectPlugin('theme','theme-alternative');assert.match(style.textContent,/red/);
+  ui.setAppearance('dark');assert.match(style.textContent,/blue/);
+  assert.equal(ui.currentView,view);assert.equal(views.length,1);
+  assert.equal(el('themeSettings').children[0],control);
+  assert.equal(el('themeList').children.length,2);
+  assert.equal(el('themeList').children.filter(card=>card.children[2].checked).length,1);
+  assert.equal(el('pluginList').children.some(card=>card.dataset.plugin==='theme-settings'),true);
 });
