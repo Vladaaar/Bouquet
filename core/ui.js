@@ -78,7 +78,6 @@
   };
   UI.addTab({ id: 'explorer', label: I.t('home'), labelKey: 'home', panel: $('explorerPanel'), button: $('homeButton') });
   UI.addTab({ id: 'settings', label: I.t('settings'), labelKey: 'settings', panel: $('settingsPanel'), button: $('settingsButton') });
-  $('closeSettings').onclick = () => UI.selectTab('explorer');
   function mountPlugin(plugin) {
     if (mounted.has(plugin.id)) return;
     mounted.add(plugin.id);

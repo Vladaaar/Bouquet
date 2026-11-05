@@ -16,6 +16,85 @@
   const progressive = $('progressive');
   const MEMORY_LIMIT = 100 * 1024 * 1024;
   let opening, reading, debounce, selectionVersion = 0;
+  let collectionId = 0, fileId = 0, changing = 0, restoring = false;
+  const navigation = B.createNavigation(restoreRoute);
+  const virtualName = entry => (entry.virtualPath || (entry.members ? entry.label || entry.name : entry.name)).replaceAll('\\', '/');
+  const parentDirectory = path => path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
+  const isDatabase = () => S.dataset && (S.dataset.tables.length > 1 || S.interp?.format === 'sqlite' || ['excel', 'cronos'].includes(S.interp?.id));
+  function contentRoutes() {
+    const routes = [{ key: 'upload', kind: 'upload' }];
+    if (S.collection) {
+      const collection = S.collection;
+      const directories = [collection.root];
+      let directory = collection.root;
+      const tail = (S.directory || '').slice(directory.length).replace(/^\//, '');
+      for (const part of tail.split('/').filter(Boolean)) { directory = directory ? directory + '/' + part : part; directories.push(directory); }
+      for (const directory of directories) routes.push({ key: collection.id + '/' + directory, kind: 'directory', collection, directory });
+    }
+    if (S.fileName) {
+      const file = { key: S.fileKey, fileKey: S.fileKey, kind: 'file', collection: S.collection, directory: S.directory,
+        name: S.fileName, label: S.fileLabel, load: S.load, query: S.query };
+      routes.push(file);
+      if (isDatabase() && S.location === 'data') routes.push({ ...file, key: file.key + '/table/' + S.active, kind: 'table', table: S.active });
+    }
+    return routes;
+  }
+  function syncNavigation() {
+    if (changing || restoring) return;
+    const routes = contentRoutes();
+    if (B.ui.activeTab !== 'explorer') routes.push({ key: routes.at(-1).key + '/tab/' + B.ui.activeTab, kind: 'tab', tab: B.ui.activeTab });
+    navigation.sync(routes);
+  }
+  function changeNavigation(action) {
+    changing++;
+    try { return action(); } finally { changing--; syncNavigation(); }
+  }
+  async function restoreRoute(route) {
+    restoring = true;
+    try {
+      if (route.kind === 'tab') { B.ui.selectTab(route.tab); return; }
+      if (B.ui.activeTab !== 'explorer' && route.key === contentRoutes().at(-1).key) { B.ui.selectTab('explorer'); return; }
+      B.ui.selectTab('explorer');
+      if (route.kind === 'upload') {
+        selectionVersion++; cancelContent(); S.dataset?.close?.();
+        Object.assign(S, { fileName: null, fileLabel: null, collection: null, directory: '', source: null, dataset: null,
+          interp: null, bytes: null, active: -1, query: '', error: '', readError: null, loadingMode: null, location: 'data', load: null });
+        q.value = ''; clear.hidden = true; resetPages(); I.bind(summary, null); setStatus(null); paint();
+      } else if (route.kind === 'directory') {
+        selectionVersion++; cancelContent(); S.dataset?.close?.();
+        Object.assign(S, { collection: route.collection, directory: route.directory, fileName: null, fileLabel: null,
+          source: null, dataset: null, interp: null, bytes: null, active: -1, query: '', error: '', readError: null, loadingMode: null, location: 'files' });
+        q.value = ''; clear.hidden = true; resetPages(); paint();
+      } else if (S.fileKey === route.fileKey && S.dataset) {
+        cancelContent(); S.location = route.kind === 'table' || !isDatabase() ? 'data' : 'tables';
+        S.active = route.kind === 'table' ? route.table : isDatabase() ? -1 : 0;
+        S.query = route.query || ''; q.value = S.query; clear.hidden = !S.query;
+        resetPages(); paint();
+      } else {
+        S.collection = route.collection; S.directory = route.directory;
+        await openSource(route.load, route.name, { label: route.label, fileKey: route.fileKey, overview: route.kind === 'file', table: route.table, query: route.query });
+      }
+    } finally { restoring = false; syncNavigation(); }
+  }
+  function goUp() {
+    const routes = contentRoutes();
+    if (B.ui.activeTab !== 'explorer') navigation.go(routes.at(-1).key);
+    else if (routes.length > 1) navigation.go(routes.at(-2).key);
+  }
+  function directoryItems() {
+    const prefix = S.directory ? S.directory + '/' : '', folders = new Map(), items = [];
+    for (const entry of S.collection.items) {
+      const name = virtualName(entry);
+      if (!name.startsWith(prefix)) continue;
+      const relative = name.slice(prefix.length), slash = relative.indexOf('/');
+      if (slash < 0) items.push({ ...entry, label: relative, virtualPath: name });
+      else {
+        const label = relative.slice(0, slash);
+        folders.set(label, { name: label, label, directory: prefix + label });
+      }
+    }
+    return [...folders.values(), ...items].sort((a, b) => !!b.directory - !!a.directory || (a.label || a.name).localeCompare(b.label || b.name, I.locale, { numeric: true }));
+  }
   const search = () => B.features.search;
   const setStatus = (key, params) => {
     I.bind(status, key, params);
@@ -31,15 +110,16 @@
     try { return m.test(value); } catch { return false; }
   }).sort((a, b) => (b.priority || 0) - (a.priority || 0))[0];
 
-  async function openSource(load, name, { preserve = false, mode, label = preserve ? S.fileLabel : name } = {}) {
+  async function openSource(load, name, { preserve = false, mode, label = preserve ? S.fileLabel : name, fileKey = preserve ? S.fileKey : 'file-' + ++fileId, overview = false, table, query } = {}) {
     const tableName = preserve ? S.dataset?.tables[S.active]?.name : null;
     opening?.abort(); reading?.abort(); clearTimeout(debounce);
     const request = opening = new AbortController();
     B.ui.currentView = null; B.emit('view:reset');
     S.dataset?.close?.();
-    Object.assign(S, { fileName: name, fileLabel: label, source: null, dataset: null, interp: null, bytes: null,
+    Object.assign(S, { fileName: name, fileLabel: label, fileKey, load, source: null, dataset: null, interp: null, bytes: null,
       opening: true, reading: false, query: preserve ? S.query : '', active: 0, error: '', loadingMode: mode || null, readError: null, location: 'data' });
     resetPages(); if (!preserve) q.value = ''; clear.hidden = !q.value;
+    if (query != null) { S.query = query; q.value = query; clear.hidden = !query; }
     stage.replaceChildren(); I.bind(summary, null); pager.hidden = true;
     $('emptyState').hidden = true; $('fileContent').hidden = false;
     setStatus('opening'); paintFileState(); paintNavigation();
@@ -75,6 +155,8 @@
       S.dataset = U.normalize(result, name);
       if (!S.dataset.tables.length) S.dataset.tables = [U.messageTable('noTables', {}, 'empty')];
       S.active = tableName ? S.dataset.tables.findIndex(t => t.name === tableName) : S.dataset.tables.length === 1 ? 0 : -1;
+      if (overview && isDatabase()) S.active = -1;
+      if (table != null && S.dataset.tables[table]) S.active = table;
       S.location = S.active < 0 ? 'tables' : 'data';
       sourceStatus();
     } catch (err) {
@@ -92,9 +174,11 @@
   function openFile(file) {
     selectionVersion++;
     if (U.ext(file.name) === 'js') return loadModuleFile(file);
-    S.collection = null;
-    B.ui.selectTab('explorer');
-    return openSource(() => U.blobSource(file), file.name);
+    return changeNavigation(() => {
+      S.collection = null; S.directory = '';
+      B.ui.selectTab('explorer');
+      return openSource(() => U.blobSource(file), file.name);
+    });
   }
   function cancelContent() {
     opening?.abort(); reading?.abort(); opening = reading = null; clearTimeout(debounce);
@@ -103,18 +187,25 @@
     stage.removeAttribute('aria-busy'); pager.hidden = true;
   }
   function showCollection(name, entries, error = '', autoOpen = true, nameKey = null) {
+    return changeNavigation(() => {
     cancelContent(); S.dataset?.close?.();
     const items = U.groupFileEntries(entries);
-    Object.assign(S, { collection: { name, entries, items, nameKey }, fileName: null, source: null,
+    const root = !nameKey && entries.length && entries.every(entry => entry.name.startsWith(name + '/')) && !items.some(entry => entry.members && entry.label === name) ? name : '';
+    Object.assign(S, { collection: { id: 'collection-' + ++collectionId, name, entries, items, nameKey, root }, directory: root, fileName: null, source: null,
       dataset: null, interp: null, bytes: null, active: -1, query: '', error, loadingMode: null, readError: null, location: 'files' });
     q.value = ''; clear.hidden = true; resetPages();
     B.ui.selectTab('explorer');
     if (autoOpen && items.length === 1 && !error) return openEntry(items[0]);
     paint();
+    });
   }
   function openEntry(entry) {
     selectionVersion++;
-    return openSource(entry.load || (() => U.blobSource(entry.file)), entry.name, { label: entry.label || entry.name });
+    return changeNavigation(() => {
+      if (entry.directory != null) { S.directory = entry.directory; paint(); return; }
+      S.directory = parentDirectory(virtualName(entry));
+      return openSource(entry.load || (() => U.blobSource(entry.file)), entry.name, { label: entry.label || entry.name });
+    });
   }
   function openFiles(files, { folder = false } = {}) {
     if (!files.length && !folder) return;
@@ -130,31 +221,36 @@
     S.active = active; S.location = 'data'; resetPages(); paint();
   }
   function navigateTo(level) {
-    selectionVersion++; cancelContent();
-    if (level === 'tables' && S.dataset) {
-      S.location = 'tables'; S.active = -1; paint();
-    } else if (level === 'files' && S.collection) {
-      showCollection(S.collection.name, S.collection.entries, '', false, S.collection.nameKey);
-    }
+    const routes = contentRoutes();
+    const route = level === 'tables' ? routes.find(route => route.kind === 'file') : level === 'files' ? routes.find(route => route.kind === 'directory') : routes.find(route => route.key === level);
+    if (route) navigation.go(route.key);
   }
   function paintHeader() {
     const explorer = B.ui.activeTab === 'explorer';
     const hasContent = !!(S.fileName || S.collection);
     $('openFile').hidden = !explorer || !hasContent;
     $('settingsButton').hidden = !explorer;
-    $('closeSettings').hidden = explorer;
+    $('backLevel').hidden = explorer && !hasContent;
+    $('backLevel').setAttribute('data-i18n-title', explorer ? 'upLevel' : 'back');
+    $('backLevel').setAttribute('data-i18n-aria-label', explorer ? 'upLevel' : 'back');
+    $('backLevel').title = I.t(explorer ? 'upLevel' : 'back');
+    $('backLevel').setAttribute('aria-label', $('backLevel').title);
     const crumbs = [];
     if (!explorer) {
       crumbs.push({ label: B.ui.activeLabel });
     } else {
-      if (S.collection && (S.location === 'files' || S.fileLabel !== S.collection.name)) crumbs.push({ label: S.collection.nameKey ? I.t(S.collection.nameKey) : S.collection.name, level: S.location !== 'files' ? 'files' : null });
+      if (S.collection) {
+        for (const route of contentRoutes().filter(route => route.kind === 'directory')) {
+          crumbs.push({ label: route.directory === S.collection.root ? S.collection.nameKey ? I.t(S.collection.nameKey) : S.collection.name : route.directory.split('/').at(-1), level: route.key });
+        }
+      }
       if (S.fileName) {
-        const prefix = S.collection?.name + '/';
+        const prefix = S.directory ? S.directory + '/' : '';
         const label = S.fileLabel || S.fileName;
         const name = label.startsWith(prefix) ? label.slice(prefix.length) : label;
-        crumbs.push({ label: name, level: S.location === 'data' && S.dataset?.tables.length > 1 ? 'tables' : null });
+        crumbs.push({ label: name, level: S.location === 'data' && isDatabase() ? 'tables' : null });
       }
-      if (S.location === 'data' && S.dataset?.tables.length > 1) {
+      if (S.location === 'data' && isDatabase()) {
         crumbs.push({ label: I.label(S.dataset.tables[S.active]) });
       }
     }
@@ -173,6 +269,7 @@
       }
       item.appendChild(node); $('breadcrumbList').appendChild(item);
     });
+    syncNavigation();
   }
   function paintNavigation() {
     paintHeader();
@@ -182,7 +279,7 @@
   function paintList() {
     B.ui.currentView = null; S.summaryView = null; stage.replaceChildren(); I.bind(summary, null); pager.hidden = true;
     const files = S.location === 'files';
-    const entries = files ? S.collection.items : S.dataset.tables;
+    const entries = files ? directoryItems() : S.dataset.tables;
     const list = document.createElement('div'); list.className = 'entity-browser';
     const title = document.createElement('h1'); I.bind(title, files ? 'files' : 'tables');
     list.appendChild(title);
@@ -433,6 +530,7 @@
   }
   $('uploadFile').onclick = () => $('pickFile').click();
   $('addPlugin').onclick = () => $('pickModule').click();
-  B.ui.actions = { openFile, openFiles, chooseFiles: () => $('pickFile').click(), refresh: paint };
+  $('backLevel').onclick = goUp;
+  B.ui.actions = { openFile, openFiles, chooseFiles: () => $('pickFile').click(), refresh: paint, back: goUp };
   form.hidden = !search(); paint(); B.ui.start(); scanFolder();
 })();

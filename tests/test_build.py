@@ -56,7 +56,11 @@ class DistributionTests(unittest.TestCase):
             self.assertFalse(any(name.startswith(("tests/", "scripts/", ".git")) or name.endswith((".DS_Store", "design.md")) for name in files))
             site = self.output / "site" / ("en" if locale == "en" else "")
             for filename, data in files.items():
-                self.assertEqual((site / filename).read_bytes(), data)
+                if filename == 'bouquet.files.json':
+                    self.assertEqual(json.loads((site / filename).read_bytes()), {'files': []})
+                    self.assertEqual(json.loads(data), {'files': ['data/example.db', 'data/example.csv']})
+                else:
+                    self.assertEqual((site / filename).read_bytes(), data)
             mobile_name = f"bouquet-{version}-mobile-{locale}.html"
             mobile = (self.output / mobile_name).read_bytes()
             self.assertEqual(hashlib.sha256(mobile).hexdigest(), sums[mobile_name])

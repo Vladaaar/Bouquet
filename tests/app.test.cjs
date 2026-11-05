@@ -13,7 +13,7 @@ async function until(predicate) {
   for (let i = 0; i < 200; i++) { if (predicate()) return; await delay(5); }
   throw new Error('Timed out');
 }
-function setup({ fetch = async () => ({ ok: false }), withSearch = true } = {}) {
+function setup({ fetch = async () => ({ ok: false }), withSearch = true, withHistory = false } = {}) {
   class Element {
     constructor() { this.children = []; this.dataset = {}; this.value = ''; this.hidden = false; this.disabled = false; this.textContent = ''; this.className = ''; this.attrs = {};
       this.classList = { contains: value => this.className.split(' ').includes(value), toggle() {}, add() {}, remove() {} }; }
@@ -27,10 +27,20 @@ function setup({ fetch = async () => ({ ok: false }), withSearch = true } = {}) 
   const el = id => { if (!elements.has(id)) elements.set(id, new Element()); return elements.get(id); };
   el('settingsTabs').hidden = true;
   const body = new Element();
+  const listeners = new Map(), entries = [null]; let historyIndex = 0;
+  const history = {
+    get state() { return entries[historyIndex]; },
+    pushState(state) { entries.splice(++historyIndex); entries.push(state); },
+    replaceState(state) { entries[historyIndex] = state; },
+    go(delta) { const next = historyIndex + delta; if (next < 0 || next >= entries.length) return;
+      setTimeout(() => { historyIndex = next; listeners.get('popstate')?.({ state: entries[next] }); }, 0); },
+    back() { this.go(-1); }, forward() { this.go(1); }
+  };
   const context = vm.createContext({ console, Blob, TextDecoder, TextEncoder, Uint8Array, ArrayBuffer, DataView, DOMException, AbortController, setTimeout, clearTimeout,
-    document: { body, head: new Element(), querySelector: () => el('bar'), getElementById: el, createElement: () => new Element() }, addEventListener() {}, scrollTo() {}, fetch });
+    document: { body, head: new Element(), querySelector: () => el('bar'), getElementById: el, createElement: () => new Element() },
+    ...(withHistory ? { history } : {}), addEventListener: (type, callback) => listeners.set(type, callback), scrollTo() {}, fetch });
   context.window = context;
-  for (const f of ['core/bouquet.js', 'core/i18n.js', 'core/sources.js', 'core/files.js', ...(withSearch ? ['modules/search.js'] : [])]) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), context);
+  for (const f of ['core/bouquet.js', 'core/i18n.js', 'core/sources.js', 'core/files.js', 'core/navigation.js', ...(withSearch ? ['modules/search.js'] : [])]) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), context);
   const views = [];
   context.Bouquet.register({ kind: 'renderer', id: 'capture', priority: 100, test: () => true, render: (_, view) => views.push(view) });
   for (const f of ['modules/themes.js', 'core/ui.js', 'core/app.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), context);
@@ -41,7 +51,7 @@ function setup({ fetch = async () => ({ ok: false }), withSearch = true } = {}) 
   };
   const select = i => el('stage').children[0].children[1].children[i].children[0].click();
   const submit = () => el('searchForm').onsubmit({ preventDefault() {} });
-  return { el, context, views, choose, submit, select };
+  return { el, context, views, choose, submit, select, history };
 }
 test('async UI pagination, table reset, progress, cancellation and latest-query wins', async () => {
   const { el, context, views, choose, submit, select } = setup();
@@ -231,15 +241,17 @@ test('folder files are listed without reading, selection is lazy, and back keeps
   assert.equal(current(el)?.textContent, 'folder');
   assert.equal(views.length, 0);
   assert.equal(el('searchForm').hidden, true);
-  assert.equal(el('stage').children[0].children[1].children[0].children[0].textContent, 'folder/a.txt');
+  assert.equal(el('stage').children[0].children[1].children[0].children[0].textContent, 'nested');
   context.Bouquet.ui.selectTab('settings'); context.Bouquet.ui.selectTab('explorer');
   assert.equal(views.length, 0);
-  select(1); await until(() => views.length === 1);
+  select(0); select(0); await until(() => views.length === 1);
   assert.equal(views[0].rows[0].cells[0], 'folder/nested/b.txt');
+  back(el);
+  assert.equal(current(el)?.textContent, 'nested');
   back(el);
   assert.equal(current(el)?.textContent, 'folder');
   assert.equal(context.Bouquet.ui.currentView, null);
-  select(0); await until(() => views.length === 2);
+  select(1); await until(() => views.length === 2);
   assert.equal(views[1].rows[0].cells[0], 'folder/a.txt');
 });
 
@@ -356,11 +368,11 @@ test('settings replace the file path and actions, and close restores the exact e
   assert.equal(pathLabel(el), 'Настройки');
   assert.equal(el('openFile').hidden, true);
   assert.equal(el('settingsButton').hidden, true);
-  assert.equal(el('closeSettings').hidden, false);
-  el('closeSettings').click();
+  assert.equal(el('backLevel').hidden, false);
+  el('backLevel').click();
   assert.equal(pathLabel(el), 'file.txt');
   assert.equal(el('openFile').hidden, false);
-  assert.equal(el('closeSettings').hidden, true);
+  assert.equal(el('backLevel').hidden, false);
   assert.equal(views.length, 1);
   assert.equal(views[0], previous);
 });
@@ -410,7 +422,7 @@ test('language cards preserve data, pagination, query, scroll and renderer DOM',
   assert.equal(el('stage').scrollTop, 80);
   assert.equal(el('q').value, 'match');
   assert.equal(el('pos').textContent, '2 / 3');
-  el('closeSettings').click();
+  el('backLevel').click();
   assert.equal(pathLabel(el), 'Оригинальный файл.txt');
   ui.setLanguage('language-ru');
   assert.match(el('dataSummary').textContent, /Найдено: 220.*Просмотрено строк: 220.*Всего строк: 220/);
@@ -502,7 +514,8 @@ test('six Cronos components open one database immediately and retain all compani
   await until(() => views.length);
   assert.equal(views.length, 1);
   assert.equal(views[0].rows.length, 8);
-  assert.equal(current(el).textContent, 'CronosPro');
+  assert.equal(current(el).textContent, 'Table');
+  assert.ok(pathLabel(el).includes('CronosPro'));
   assert.equal(views[0].rows[0].cells[1], 'row0');
 });
 test('twelve Cronos components form two database entries and stay isolated on navigation', async () => {
@@ -515,8 +528,8 @@ test('twelve Cronos components form two database entries and stay isolated on na
   assert.equal(views.length, 0);
   select(1); await until(() => views.length);
   assert.equal(views[0].rows.length, 8);
-  assert.equal(current(el).textContent, 'Beta');
-  crumbs(el).find(node => node.dataset.level === 'files').click();
+  assert.equal(current(el).textContent, 'Table');
+  crumbs(el)[0].click();
   assert.equal(items().length, 2);
   select(0); await until(() => views.length === 2);
   assert.equal(views[1].rows.length, 3);
@@ -525,7 +538,7 @@ test('database grouping preserves independent files and updates when the plugin 
   const { el, context, views, select } = setup();
   const text = Object.assign(new Blob(['notes']), { name: 'notes.txt' });
   el('pickFile').onchange({ target: { files: [...cronosFiles('Bank'), text], value: '' } });
-  assert.equal(el('stage').children[0].children[1].children.length, 7);
+  assert.equal(el('stage').children[0].children[1].children.length, 2);
   addCronos(context);
   const items = el('stage').children[0].children[1].children;
   assert.equal(items.length, 2);
@@ -539,7 +552,8 @@ test('loading the Cronos plugin later auto-opens a sole grouped database', async
   el('pickFile').onchange({ target: { files: cronosFiles('Bank'), value: '' } });
   addCronos(context); await until(() => views.length);
   assert.equal(views.length, 1);
-  assert.equal(current(el).textContent, 'Bank');
+  assert.equal(current(el).textContent, 'Table');
+  assert.ok(pathLabel(el).includes('Bank'));
 });
 
 test('scan counters update without matches, keep language during reading and retain explicit errors', async () => {
@@ -590,4 +604,59 @@ test('Hello example mounts once when loaded, translates and returns to the prese
   context.Bouquet.ui.selectTab('hello');
   assert.equal(el('workspace').children.at(-1), panel);
   assert.equal(panel.children.length, 3);
+});
+
+test('cross and browser history follow every folder, database and table level including automatic opening', async () => {
+  const {el, context, views, select, history} = setup({withHistory:true});
+  let parses = 0;
+  context.Bouquet.register({id:'hierarchy',kind:'interpreter',format:'sqlite',priority:100,test:({ext})=>ext==='db',
+    open() {parses++;return {tables:[{name:'records',columns:['id'],rows:[[1]]}]};}});
+  const files=['root/child/deep/base.db','root/note.txt'].map(name=>Object.assign(new Blob(['data']),{name:name.split('/').at(-1),webkitRelativePath:name}));
+  context.Bouquet.ui.actions.openFiles(files,{folder:true});
+  select(0);select(0);select(0);await until(()=>views.length===1);
+  assert.equal(pathLabel(el),'root / child / deep / base.db / records');
+  const saved=context.Bouquet.ui.currentView;
+  el('settingsButton').click();history.back();await until(()=>context.Bouquet.ui.activeTab==='explorer');
+  assert.equal(context.Bouquet.ui.currentView,saved);
+  assert.equal(parses,1);
+  el('backLevel').click();await until(()=>current(el).textContent==='base.db');
+  assert.equal(el('stage').children[0].children[1].children.length,1); // A sole table still has a database parent.
+  history.back();await until(()=>current(el).textContent==='deep');
+  el('backLevel').click();await until(()=>current(el).textContent==='child');
+  history.back();await until(()=>current(el).textContent==='root');
+  el('backLevel').click();await until(()=>el('emptyState').hidden===false);
+  assert.equal(el('backLevel').hidden,true);
+  for (const label of ['root','child','deep','base.db','records']) {
+    history.forward();await until(()=>current(el)?.textContent===label);
+  }
+  await until(()=>views.length===2);
+  assert.equal(parses,2); // Forward can reopen a closed database from its in-memory File.
+  assert.equal(views.at(-1).table.name,'records');
+});
+
+test('closing settings during a pending read preserves the request and uploader settings return to uploader', async () => {
+  const {el,context,choose,views,history}=setup({withHistory:true});
+  el('settingsButton').click();el('backLevel').click();await until(()=>context.Bouquet.ui.activeTab==='explorer');
+  assert.equal(el('emptyState').hidden,false);
+  let finish,signal;
+  context.Bouquet.register({id:'pending-history',kind:'interpreter',priority:100,test:()=>true,
+    open:()=>({tables:[{name:'data',columns:['id'],read:async args=>{
+      signal=args.signal;await new Promise(resolve=>{finish=resolve;});return {rows:[{n:1,cells:[1]}],hasMore:false};
+    }}]})});
+  choose();await until(()=>finish);el('settingsButton').click();history.back();await until(()=>context.Bouquet.ui.activeTab==='explorer');
+  assert.equal(signal.aborted,false);finish();await until(()=>views.length);
+  el('backLevel').click();await until(()=>el('emptyState').hidden===false);
+  assert.equal(el('favicon').dataset.icon,'💐');
+});
+
+test('a grouped Cronos database in a child folder keeps all directory parents', async () => {
+  const {el,context,views,select}=setup();addCronos(context);
+  const note=Object.assign(new Blob(['note']),{name:'note.txt',webkitRelativePath:'root/note.txt'});
+  context.Bouquet.ui.actions.openFiles([...cronosFiles('root/child/Bank'),note],{folder:true});
+  select(0);select(0);await until(()=>views.length);
+  assert.equal(pathLabel(el),'root / child / Bank / Table');
+  el('backLevel').click();assert.equal(current(el).textContent,'Bank');
+  el('backLevel').click();assert.equal(pathLabel(el),'root / child');
+  assert.equal(el('stage').children[0].children[1].children[0].children[0].textContent,'Bank');
+  el('backLevel').click();assert.equal(pathLabel(el),'root');
 });

@@ -16,9 +16,17 @@ python3 -m http.server 8000
 
 Visit [localhost:8000](http://localhost:8000). With `file://`, browsers block automatic access to neighbouring files; manual selection works normally. HTTP servers without Range support download the complete file before local reads. For progressive local reads, choose the file manually.
 
+The GitHub Pages build uses an empty file manifest: it starts with **📂 Open** and does not automatically download demo databases. ZIP distributions retain the demo manifest for local-server use.
+
 ## Browse and search
 
-Choose multiple files or drop folders into the window. Multiple files and tables appear as lists. Parent breadcrumbs return to those lists. Settings preserves the file, query, page and scroll position.
+Choose multiple files or drop folders into the window. Folders are shown one level at a time, rather than as a flat list of relative paths. Parent breadcrumbs return directly to their level; the current breadcrumb is inert.
+
+The **× after the path** and the browser's **Back** button both move up one level: **file picker → selected folder/file set → child folders → database → table**, read from right to left when returning. For example, closing a table shows the database's table list; closing that list shows its containing folder. The top folder or a standalone file returns to the file picker. A database with one table opens it automatically, but Back/× still reveals its table list. A plain text or single-table CSV file returns directly to its folder or the picker. CronosPro components stay grouped as one database. Folder levels require relative paths, supplied by folder drag-and-drop; a normal multiple-file picker cannot reveal parent directories that the browser does not expose.
+
+Settings can be opened at every level, including the picker. Back/× closes Settings and restores the exact previous level, DOM, query, page and scroll position; an ongoing read continues. Switching between Settings and plugin sections does not add file hierarchy levels. The logo also returns from Settings to the preserved viewer. Leaving a table for its parent cancels the current read. A parent breadcrumb can skip several levels at once.
+
+Browser **Forward** can revisit levels while the page remains open; a closed database is read again from the File/Blob retained in memory. Files are not serialized into `history.state`, written to browser storage or added to the URL. Reloading does not restore local selections. At the file picker, × is hidden and browser Back can leave the application normally. Cancelling the system file dialog does not add a level or change the current view. Choosing another file set replaces the hierarchy above the picker.
 
 The status row contains only **Found · Rows scanned · Total rows**. Unknown totals are omitted; `≥` means the search is still incomplete. Scanned rows count the source records examined for the current query, including records that do not match. In-memory filtering scans the entire table; without filtering it counts rows through the current page. For CronosPro, the scan includes bank record slots, including deleted entries and entries from other tables. Loading notices and errors appear separately.
 

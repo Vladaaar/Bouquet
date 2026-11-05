@@ -117,7 +117,8 @@ def build(root, output, tag=None):
             for name, data in localized.items():
                 destination = target / name
                 destination.parent.mkdir(parents=True, exist_ok=True)
-                destination.write_bytes(data)
+                # Pages starts at the file picker; demos remain available manually.
+                destination.write_bytes(b'{"files": []}\n' if name == "bouquet.files.json" else data)
             (target / "mobile.html").write_bytes(mobile)
         (site / ".nojekyll").touch()
         # Replace only our generated Pages tree; old modules must not survive a rebuild.
