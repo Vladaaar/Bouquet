@@ -1,5 +1,27 @@
 # Release notes / История изменений
 
+## [1.2.2] - 2026-11-05
+
+### Русский
+
+- Pages открывается с загрузчика файлов, без автоматического скачивания демонстрационных баз.
+- Крестик после пути и браузерная «Назад» поднимают на один уровень: таблица → база → вложенные папки → загрузчик. Поддержан переход «Вперёд», в том числе после автоматического открытия единственной таблицы.
+- Закрытие настроек возвращает к прежнему просмотру с сохранением поиска, порции, DOM и прокрутки; текущее чтение продолжается.
+- Плагины сгруппированы по языкам, темам и форматам. Альтернативы выбираются взаимоисключающими тумблерами; одиночные плагины и плагины настроек находятся в нижнем разделе «Прочие плагины».
+- Добавлен API плагинов настроек групп, выбора обработчика и изменения его параметров. Настройки чтения SQLite размещены под заголовком SQLite.
+- Стандартная тема Bouquet содержит Light/Dark-состояния. Отдельный контрол Appearance предлагает System/Light/Dark, по умолчанию следует системе и реагирует на её изменения без перечитывания данных.
+- Документация описывает навигацию, группы, настройки и границу реализации: выбор обработчика не выгружает уже исполненный JavaScript плагина.
+
+### English
+
+- Pages starts at the file picker without automatically downloading demo databases.
+- The cross after the path and browser Back move up one level: table → database → nested folders → file picker. Forward navigation also supports automatically opened single-table databases.
+- Closing Settings restores the query, page, DOM and scroll position while ongoing reads continue.
+- Plugins are grouped by language, theme and file format. Alternatives use exclusive switches; single plugins and group-settings plugins appear under Other plugins at the bottom.
+- Added group-settings, reader-selection and plugin-options APIs. SQLite reading controls now appear under SQLite.
+- The default Bouquet theme provides Light/Dark states. A separate Appearance control offers System/Light/Dark, follows the system by default and reacts to changes without rereading data.
+- Documentation covers navigation, groups, settings and the implementation boundary: selecting a reader does not unload already executed plugin JavaScript.
+
 ## [1.2.1] - 2026-10-31
 
 ### Русский
