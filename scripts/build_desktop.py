@@ -89,7 +89,7 @@ def build(root, output, locale, tag=None, prepare_only=False):
     if system not in TARGETS or arch not in ({'x64', 'arm64'} if system == 'macos' else {'x64'}):
         raise ValueError('Supported: Windows/Linux x64 and macOS x64/arm64')
     package = root / 'desktop/node_modules/pake-cli'
-    if json.loads((package / 'package.json').read_text())['version'] != PAKE_VERSION:
+    if json.loads((package / 'package.json').read_text(encoding='utf-8'))['version'] != PAKE_VERSION:
         raise ValueError(f'Run npm ci --prefix desktop (requires Pake {PAKE_VERSION})')
     # Ship Pake's notices alongside the local app, without modifying its source.
     for name in ('LICENSE', 'LICENSE-EXCEPTION'):
@@ -97,7 +97,7 @@ def build(root, output, locale, tag=None, prepare_only=False):
     env = dict(os.environ, CI='true', NO_UPDATE_NOTIFIER='1')
     command = ['node', str(package / 'dist/cli.js'), '--config', str(config),
                '--targets', TARGETS[system][0], '--json']
-    result = subprocess.run(command, cwd=output, env=env, text=True, stdout=subprocess.PIPE, check=False)
+    result = subprocess.run(command, cwd=output, env=env, encoding='utf-8', stdout=subprocess.PIPE, check=False)
     (output / 'pake-result.json').write_text(result.stdout, encoding='utf-8')
     if result.returncode:
         raise ValueError(f'Pake exited with {result.returncode}: {result.stdout}')
