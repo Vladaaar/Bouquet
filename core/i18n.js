@@ -290,7 +290,10 @@
   "страница {page} за границей файла": "Page {page} is outside the file"
 };
   const own = (object, key) => object && Object.prototype.hasOwnProperty.call(object, key);
-  const defaultLocale = globalThis.document?.documentElement?.getAttribute?.('lang') === 'en' ? 'en' : 'ru';
+  const preferredLanguages = [...(globalThis.navigator?.languages || []), globalThis.navigator?.language];
+  const defaultLocale = preferredLanguages.filter(value => typeof value === 'string')
+    .map(value => value.toLowerCase().split('-')[0]).find(value => value === 'ru' || value === 'en') || 'en';
+  globalThis.document?.documentElement?.setAttribute?.('lang', defaultLocale);
   const I = B.i18n = {
     language: 'language-' + defaultLocale, locale: defaultLocale,
     t(key, params = {}) {

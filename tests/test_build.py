@@ -22,76 +22,51 @@ class DistributionTests(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.output = Path(self.temporary.name) / "dist"
 
-    def test_complete_offline_archives_and_pages(self):
+    def test_complete_offline_archive_and_pages(self):
         version = builder.build(ROOT, self.output)
-        sums = {}
-        for line in (self.output / "SHA256SUMS.txt").read_text().splitlines():
-            digest, name = line.split("  ")
-            sums[name] = digest
-        for locale in ("ru", "en"):
-            name = f"bouquet-{version}-{locale}.zip"
-            self.assertEqual(hashlib.sha256((self.output / name).read_bytes()).hexdigest(), sums[name])
-            with ZipFile(self.output / name) as archive:
-                self.assertIsNone(archive.testzip())
-                files = {n.split("/", 1)[1]: archive.read(n) for n in archive.namelist()}
-            html = files["index.html"].decode()
-            self.assertIn(f'<html lang="{locale}">', html)
-            self.assertIn(f'<meta name="version" content="{version}">', html)
-            self.assertIn('<title>Bouquet</title>', html)
-            self.assertIn('rel="icon" type="image/svg+xml" href="data:image/svg+xml,', html)
-            for reference in re.findall(r'(?:src|href)="([^"]+)"', html):
-                if not reference.startswith(("https:", "#", "data:")):
-                    self.assertIn(reference, files)
-            for module in (ROOT / "modules").rglob("*.js"):
-                self.assertIn(module.relative_to(ROOT).as_posix(), files)
-            self.assertIn("modules/vendor/sheetjs-0.20.3/LICENSE", files)
-            self.assertIn("modules/vendor/cronodump/LICENSE", files)
-            self.assertIn("modules/hello.js", files)
-            self.assertIn("docs/DEVELOPMENT.md", files)
-            self.assertIn("docs/DEVELOPMENT_RU.md", files)
-            self.assertNotIn('src="modules/hello.js"', html)
-            self.assertNotIn("CHANGELOG.md", files)
-            self.assertNotIn("release-notes.md", files)
-            self.assertEqual({name for name in files if name.startswith("data/")}, {"data/example.db", "data/example.csv"})
-            self.assertFalse(any(name.startswith(("tests/", "scripts/", ".git")) or name.endswith((".DS_Store", "design.md")) for name in files))
-            site = self.output / "site" / ("en" if locale == "en" else "")
-            for filename, data in files.items():
-                if filename == 'bouquet.files.json':
-                    self.assertEqual(json.loads((site / filename).read_bytes()), {'files': []})
-                    self.assertEqual(json.loads(data), {'files': ['data/example.db', 'data/example.csv']})
-                else:
-                    self.assertEqual((site / filename).read_bytes(), data)
-            mobile_name = f"bouquet-{version}-mobile-{locale}.html"
-            mobile = (self.output / mobile_name).read_bytes()
-            self.assertEqual(hashlib.sha256(mobile).hexdigest(), sums[mobile_name])
-            self.assertEqual((site / 'mobile.html').read_bytes(), mobile)
-            # Execute the shipped scripts, using only Node built-ins, to verify the
-            # actual initial language and that switching languages remains possible.
-            subprocess.run(["node", "-e", """
-              const fs = require('node:fs'), vm = require('node:vm'), assert = require('node:assert/strict');
-              const [folder, locale] = process.argv.slice(1);
-              const html = fs.readFileSync(folder + '/index.html', 'utf8');
-              let lang = html.match(/<html lang="([^"]+)"/)[1];
-              const context = vm.createContext({document: {
-                documentElement: {getAttribute: () => lang, setAttribute: (_, value) => {lang = value;}},
-                querySelectorAll: () => []
-              }});
-              context.window = context;
-              for (const name of ['bouquet', 'i18n']) vm.runInContext(fs.readFileSync(folder + '/core/' + name + '.js', 'utf8'), context);
-              assert.equal(context.Bouquet.i18n.locale, locale);
-              assert.equal(context.Bouquet.i18n.t('open'), locale === 'en' ? 'Open' : 'Открыть');
-              context.Bouquet.i18n.setLanguage('language-' + (locale === 'en' ? 'ru' : 'en'));
-              assert.notEqual(lang, locale);
-            """, str(site), locale], check=True, capture_output=True)
-        self.assertTrue((self.output / "site/.nojekyll").is_file())
-        self.assertEqual({p.name for p in self.output.iterdir()}, {
-            f"bouquet-{version}-ru.zip", f"bouquet-{version}-en.zip",
-            f"bouquet-{version}-mobile-ru.html", f"bouquet-{version}-mobile-en.html",
-            "SHA256SUMS.txt", "site"
-        })
-        self.assertFalse((self.output / "site/CHANGELOG.md").exists())
+        sums = dict(line.split("  ")[::-1] for line in (self.output / "SHA256SUMS.txt").read_text().splitlines())
+        name = f"bouquet-{version}-html.zip"
+        self.assertEqual(hashlib.sha256((self.output / name).read_bytes()).hexdigest(), sums[name])
+        with ZipFile(self.output / name) as archive:
+            self.assertIsNone(archive.testzip())
+            files = {n.split("/", 1)[1]: archive.read(n) for n in archive.namelist()}
+        html = files["index.html"].decode()
+        self.assertIn(f'<meta name="version" content="{version}">', html)
+        self.assertIn('<title>Bouquet</title>', html)
+        for reference in re.findall(r'(?:src|href)="([^"]+)"', html):
+            if not reference.startswith(("https:", "#", "data:")):
+                self.assertIn(reference, files)
+        for module in (ROOT / "modules").rglob("*.js"):
+            name = module.relative_to(ROOT).as_posix()
+            if name == "modules/hello.js":
+                self.assertNotIn(name, files)
+            else:
+                self.assertIn(name, files)
+        for name in ('modules/vendor/sheetjs-0.20.3/LICENSE', 'modules/vendor/cronodump/LICENSE', 'docs/DEVELOPMENT.md', 'docs/DEVELOPMENT_RU.md'):
+            self.assertIn(name, files)
+        self.assertNotIn("CHANGELOG.md", files)
+        self.assertNotIn("release-notes.md", files)
+        self.assertEqual({name for name in files if name.startswith("data/")}, {"data/example.db", "data/example.csv"})
+        self.assertFalse(any(name.startswith(("tests/", "scripts/", ".git")) or name.endswith((".DS_Store", "design.md")) for name in files))
+        site = self.output / "site"
+        for name, data in files.items():
+            if name == 'bouquet.files.json':
+                self.assertEqual(json.loads((site / name).read_bytes()), {'files': []})
+                self.assertEqual(json.loads(data), {'files': ['data/example.db', 'data/example.csv']})
+            else:
+                self.assertEqual((site / name).read_bytes(), data)
+        self.assertFalse((site / 'modules/hello.js').exists())
+        self.assertTrue((site / '.nojekyll').is_file())
+        self.assertIn('url=../', (site / 'en/index.html').read_text())
+        self.assertIn('url=../mobile.html', (site / 'en/mobile.html').read_text())
+        android_name = f"bouquet-{version}-html-android.html"
+        android = (self.output / android_name).read_bytes()
+        self.assertEqual(hashlib.sha256(android).hexdigest(), sums[android_name])
+        self.assertEqual((site / 'mobile.html').read_bytes(), android)
+        self.assertEqual({p.name for p in self.output.iterdir()}, {f"bouquet-{version}-html.zip", android_name, "SHA256SUMS.txt", "site"})
+        self.assertEqual(set(sums), {f"bouquet-{version}-html.zip", android_name})
 
-    def test_mobile_is_self_contained_and_inline_scripts_remain_valid(self):
+    def test_android_is_self_contained_without_hello_and_scripts_remain_valid(self):
         from html.parser import HTMLParser
 
         class Document(HTMLParser):
@@ -111,46 +86,53 @@ class DistributionTests(unittest.TestCase):
                     self.external.append(attrs.get('href'))
 
         version = builder.build(ROOT, self.output)
-        for locale in ('ru', 'en'):
-            path = self.output / f'bouquet-{version}-mobile-{locale}.html'
-            html = path.read_text(encoding='utf-8')
-            doc = Document()
-            doc.feed(html)
-            self.assertEqual(doc.external, [])
-            self.assertIn(f'<html data-standalone="true" lang="{locale}">', html)
-            self.assertIn('<title>Bouquet</title>', html)
-            self.assertEqual(len(doc.sources), len(set(doc.sources)))
-            self.assertEqual(set(doc.sources), {name for name in builder.payload(ROOT) if name.endswith('.js')})
-            self.assertLess(doc.sources.index('modules/vendor/sheetjs-0.20.3/xlsx.full.min.js'), doc.sources.index('modules/excel.js'))
-            self.assertLess(doc.sources.index('modules/hello.js'), doc.sources.index('core/ui.js'))
-            licenses = re.search(r'<script type="application/json" id="bouquet-licenses">(.*?)</script>', html, re.S)
-            self.assertEqual(json.loads(licenses[1])['modules/vendor/sheetjs-0.20.3/LICENSE'], (ROOT / 'modules/vendor/sheetjs-0.20.3/LICENSE').read_text())
-            subprocess.run(['node', '-e', r'''
-              const fs = require('node:fs'), vm = require('node:vm');
-              const html = fs.readFileSync(process.argv[1], 'utf8');
-              for (const [, attrs, source] of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)) {
-                if (!attrs.includes('application/json')) new vm.Script(source);
-              }
-            ''', str(path)], check=True, capture_output=True)
+        path = self.output / f'bouquet-{version}-html-android.html'
+        html = path.read_text(encoding='utf-8')
+        doc = Document()
+        doc.feed(html)
+        self.assertEqual(doc.external, [])
+        self.assertIn('data-standalone="true"', html)
+        self.assertIn('<title>Bouquet</title>', html)
+        self.assertNotIn('modules/hello.js', doc.sources)
+        self.assertEqual(len(doc.sources), len(set(doc.sources)))
+        self.assertEqual(set(doc.sources), {name for name in builder.payload(ROOT) if name.endswith('.js')})
+        self.assertLess(doc.sources.index('modules/vendor/sheetjs-0.20.3/xlsx.full.min.js'), doc.sources.index('modules/excel.js'))
+        licenses = re.search(r'<script type="application/json" id="bouquet-licenses">(.*?)</script>', html, re.S)
+        self.assertEqual(json.loads(licenses[1])['modules/vendor/sheetjs-0.20.3/LICENSE'], (ROOT / 'modules/vendor/sheetjs-0.20.3/LICENSE').read_text())
+        subprocess.run(['node', '-e', r'''
+          const fs = require('node:fs'), vm = require('node:vm');
+          const html = fs.readFileSync(process.argv[1], 'utf8');
+          for (const [, attrs, source] of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)) {
+            if (!attrs.includes('application/json')) new vm.Script(source);
+          }
+        ''', str(path)], check=True, capture_output=True)
 
-    def test_mobile_escapes_script_terminators(self):
+    def test_android_escapes_script_terminators(self):
         files = builder.payload(ROOT)
-        files['modules/hello.js'] += b'\nconst testTerminator = "</script><p>injected</p>";\n'
-        mobile = builder.standalone(files['index.html'].decode(), files)
-        self.assertIn(r'"<\/script><p>injected</p>"', mobile)
-        self.assertNotIn('"</script><p>injected</p>"', mobile)
+        files['modules/search.js'] += b'\nconst testTerminator = "</script><p>injected</p>";\n'
+        android = builder.standalone(files['index.html'].decode(), files)
+        self.assertIn(r'"<\/script><p>injected</p>"', android)
+        self.assertNotIn('"</script><p>injected</p>"', android)
 
-    def test_reproducible_and_cleans_stale_pages_files(self):
+    def test_reproducible_and_cleans_stale_generated_files(self):
         version = builder.build(ROOT, self.output)
-        first = (self.output / f"bouquet-{version}-en.zip").read_bytes()
-        mobile = (self.output / f"bouquet-{version}-mobile-en.html").read_bytes()
+        name = f"bouquet-{version}-html.zip"
+        android_name = f"bouquet-{version}-html-android.html"
+        first = (self.output / name).read_bytes()
+        android = (self.output / android_name).read_bytes()
+        (self.output / "site/modules/hello.js").write_text('Old Hello')
         (self.output / "site/obsolete.js").touch()
         (self.output / "release-notes.md").write_text("Obsolete generated notes")
+        old = [f"bouquet-{version}-{locale}.zip" for locale in ('ru', 'en')] + [f"bouquet-{version}-mobile-{locale}.html" for locale in ('ru', 'en')]
+        for name in old:
+            (self.output / name).touch()
         builder.build(ROOT, self.output, "v" + version)
-        self.assertEqual(first, (self.output / f"bouquet-{version}-en.zip").read_bytes())
-        self.assertEqual(mobile, (self.output / f"bouquet-{version}-mobile-en.html").read_bytes())
+        self.assertEqual(first, (self.output / f"bouquet-{version}-html.zip").read_bytes())
+        self.assertEqual(android, (self.output / android_name).read_bytes())
         self.assertFalse((self.output / "site/obsolete.js").exists())
+        self.assertFalse((self.output / "site/modules/hello.js").exists())
         self.assertFalse((self.output / "release-notes.md").exists())
+        self.assertTrue(all(not (self.output / name).exists() for name in old))
 
     def test_wrong_tag_cannot_produce_a_release(self):
         with self.assertRaisesRegex(ValueError, "does not match VERSION"):

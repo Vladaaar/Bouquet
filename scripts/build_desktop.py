@@ -25,11 +25,11 @@ TARGETS = {'windows': ('x64', {'msi'}),
            'macos': ('dmg', {'dmg'})}
 
 
-def prepare(root, output, locale, tag=None):
+def prepare(root, output, tag=None):
     """Only application code enters the native bundle, never the checkout/data tree."""
     version = web.metadata(root, tag)
     files = web.payload(root)
-    source = files['index.html'].decode().replace('<html lang="ru">', f'<html lang="{locale}">', 1)
+    source = files['index.html'].decode()
     source = web.standalone(source, files)
     source = source.replace('<meta charset="utf-8">', '<meta charset="utf-8">\n'
                             f'<meta http-equiv="Content-Security-Policy" content="{html.escape(CSP, quote=True)}">\n'
@@ -53,7 +53,7 @@ def prepare(root, output, locale, tag=None):
     return version, config_path
 
 
-def collect(result, output, version, locale, system, arch):
+def collect(result, output, version, system, arch):
     """Pake can report partial success on Linux: require every requested format."""
     expected = TARGETS[system][1]
     if not result.get('ok') or result.get('platform') != {'macos': 'darwin', 'windows': 'win32', 'linux': 'linux'}[system] or result.get('arch') != arch:
@@ -70,18 +70,18 @@ def collect(result, output, version, locale, system, arch):
         if not source.is_file() or source.is_symlink() or source.stat().st_size == 0:
             raise ValueError(f'Missing/empty Pake artifact: {source}')
         extension = 'AppImage' if fmt == 'appimage' else fmt
-        name = f'bouquet-{version}-desktop-{system}-{arch}-{locale}.{extension}'
+        name = f'bouquet-{version}-desktop-{system}-{arch}.{extension}'
         target = destination / name
         shutil.copyfile(source, target)
         if fmt == 'appimage':
             target.chmod(0o755)
         sums.append(f'{hashlib.sha256(target.read_bytes()).hexdigest()}  {name}\n')
-    (destination / f'SHA256SUMS-desktop-{system}-{arch}-{locale}.txt').write_text(''.join(sums), encoding='utf-8')
+    (destination / f'SHA256SUMS-desktop-{system}-{arch}.txt').write_text(''.join(sums), encoding='utf-8')
 
 
-def build(root, output, locale, tag=None, prepare_only=False):
+def build(root, output, tag=None, prepare_only=False):
     output.mkdir(parents=True, exist_ok=True)
-    version, config = prepare(root, output, locale, tag or None)
+    version, config = prepare(root, output, tag or None)
     if prepare_only:
         return
     system = {'darwin': 'macos', 'win32': 'windows', 'linux': 'linux'}.get(sys.platform)
@@ -101,17 +101,16 @@ def build(root, output, locale, tag=None, prepare_only=False):
     (output / 'pake-result.json').write_text(result.stdout, encoding='utf-8')
     if result.returncode:
         raise ValueError(f'Pake exited with {result.returncode}: {result.stdout}')
-    collect(json.loads(result.stdout), output, version, locale, system, arch)
+    collect(json.loads(result.stdout), output, version, system, arch)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--locale', choices=('ru', 'en'), required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--tag')
     parser.add_argument('--prepare-only', action='store_true', help='Generate frontend/config without installing or running Pake')
     args = parser.parse_args()
     try:
-        build(ROOT, args.output.resolve(), args.locale, args.tag, args.prepare_only)
+        build(ROOT, args.output.resolve(), args.tag, args.prepare_only)
     except (ValueError, OSError) as error:
         parser.exit(1, f'Desktop build failed: {error}\n')

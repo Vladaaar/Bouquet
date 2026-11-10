@@ -39,7 +39,7 @@ def payload(root):
         names.extend(p.relative_to(root).as_posix() for p in (root / directory).rglob("*")
                      if p.is_file() and not any(part.startswith(".") for part in p.relative_to(root).parts))
     result = {}
-    for name in sorted(names):
+    for name in sorted(set(names) - {'modules/hello.js'}):  # developer example, never shipped
         path = root / name
         if path.resolve() != root.resolve() / name:
             raise ValueError(f"Symlinks are not allowed in distributions: {name}")
@@ -59,7 +59,7 @@ def archive(path, prefix, files):
 
 
 def standalone(html, files):
-    """Inline the complete app, including optional plugins and local dependencies."""
+    """Inline the shipped app, including optional production plugins and dependencies."""
     def inline_script(name):
         # HTML raw-text elements end at </script even inside JS string literals.
         source = re.sub(r"</script", lambda m: "<\\/" + m[0][2:], files[name].decode(), flags=re.I)
@@ -98,28 +98,24 @@ def build(root, output, tag=None):
     checksums = []
     with tempfile.TemporaryDirectory(prefix="bouquet-build-") as temporary:
         site = Path(temporary) / "site"
-        for locale in ("ru", "en"):
-            localized = dict(files)
-            html = files["index.html"].decode()
-            if '<html lang="ru">' not in html:
-                raise ValueError('Expected <html lang="ru"> in source index.html')
-            html = html.replace('<html lang="ru">', f'<html lang="{locale}">', 1)
-            html = html.replace('<meta charset="utf-8">', f'<meta charset="utf-8">\n<meta name="version" content="{version}">', 1)
-            localized["index.html"] = html.encode()
-            filename = f"bouquet-{version}-{locale}.zip"
-            archive(output / filename, f"bouquet-{version}-{locale}", localized)
-            checksums.append(f"{hashlib.sha256((output / filename).read_bytes()).hexdigest()}  {filename}\n")
-            mobile = standalone(html, files).encode()
-            mobile_name = f"bouquet-{version}-mobile-{locale}.html"
-            (output / mobile_name).write_bytes(mobile)
-            checksums.append(f"{hashlib.sha256(mobile).hexdigest()}  {mobile_name}\n")
-            target = site if locale == "ru" else site / "en"
-            for name, data in localized.items():
-                destination = target / name
-                destination.parent.mkdir(parents=True, exist_ok=True)
-                # Pages starts at the file picker; demos remain available manually.
-                destination.write_bytes(b'{"files": []}\n' if name == "bouquet.files.json" else data)
-            (target / "mobile.html").write_bytes(mobile)
+        html = files["index.html"].decode().replace('<meta charset="utf-8">', f'<meta charset="utf-8">\n<meta name="version" content="{version}">', 1)
+        files["index.html"] = html.encode()
+        filename = f"bouquet-{version}-html.zip"
+        archive(output / filename, f"bouquet-{version}", files)
+        checksums.append(f"{hashlib.sha256((output / filename).read_bytes()).hexdigest()}  {filename}\n")
+        android = standalone(html, files).encode()
+        android_name = f"bouquet-{version}-html-android.html"
+        (output / android_name).write_bytes(android)
+        checksums.append(f"{hashlib.sha256(android).hexdigest()}  {android_name}\n")
+        for name, data in files.items():
+            destination = site / name
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(b'{"files": []}\n' if name == "bouquet.files.json" else data)
+        (site / "mobile.html").write_bytes(android)
+        # Existing English bookmarks now use the same system-language app.
+        (site / "en").mkdir()
+        for name, target in (("index.html", "../"), ("mobile.html", "../mobile.html")):
+            (site / "en" / name).write_text(f'<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0;url={target}"><a href="{target}">Bouquet</a>', encoding="utf-8")
         (site / ".nojekyll").touch()
         # Replace only our generated Pages tree; old modules must not survive a rebuild.
         if (output / "site").exists():
@@ -128,6 +124,10 @@ def build(root, output, tag=None):
     (output / "SHA256SUMS.txt").write_text("".join(checksums), encoding="utf-8")
     # Remove the generated notes left by earlier versions of the builder.
     (output / "release-notes.md").unlink(missing_ok=True)
+    # Remove only obsolete files produced by the old language-specific builder.
+    for locale in ("ru", "en"):
+        for name in (f"bouquet-{version}-{locale}.zip", f"bouquet-{version}-mobile-{locale}.html"):
+            (output / name).unlink(missing_ok=True)
     return version
 
 

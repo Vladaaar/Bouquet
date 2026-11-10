@@ -6,6 +6,7 @@ const path = require('node:path');
 global.window = global;
 for (const file of ['bouquet', 'i18n']) vm.runInThisContext(fs.readFileSync(path.join(__dirname, '../core/' + file + '.js'), 'utf8'));
 vm.runInThisContext(fs.readFileSync(path.join(__dirname, '../core/sources.js'), 'utf8'));
+Bouquet.i18n.setLanguage('language-ru'); // This fixture asserts Russian reader notices.
 const U = Bouquet.util;
 test('Blob source reads only the requested slice and honours cancellation', async () => {
   const source = U.blobSource(new Blob(['abcdef']));

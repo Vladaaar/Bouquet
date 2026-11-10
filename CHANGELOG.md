@@ -1,5 +1,19 @@
 # Release notes / История изменений
 
+## [Unreleased]
+
+### Русский
+
+- Единые сборки без разделения по языкам: начальный язык выбирается по настройкам системы/браузера (RU/EN, иначе EN). Ручное переключение сохранено.
+- HTML-артефакты переименованы в `release-html` (ZIP) и `release-html-android` (автономный HTML); десктопная матрица сокращена до четырёх заданий.
+- Плагин-пример Hello исключён из всех дистрибутивов и остаётся доступен в репозитории исходников.
+
+### English
+
+- Unified builds select the initial system/browser language (RU/EN, falling back to EN) and retain manual switching.
+- HTML artifacts are now `release-html` (ZIP) and `release-html-android` (standalone HTML); the desktop matrix now has four jobs.
+- The Hello example plugin is excluded from all distributions and remains available in the source repository.
+
 ## [1.3.0] - 2026-11-10
 
 ### Русский

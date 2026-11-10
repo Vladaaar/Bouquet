@@ -38,7 +38,7 @@ function setup({ fetch = async () => ({ ok: false }), withSearch = true, withHis
       setTimeout(() => { historyIndex = next; listeners.get('popstate')?.({ state: entries[next] }); }, 0); },
     back() { this.go(-1); }, forward() { this.go(1); }
   };
-  const context = vm.createContext({ console, Blob, TextDecoder, TextEncoder, Uint8Array, ArrayBuffer, DataView, DOMException, AbortController, setTimeout, clearTimeout,
+  const context = vm.createContext({ navigator: { languages: ['ru-RU'] }, console, Blob, TextDecoder, TextEncoder, Uint8Array, ArrayBuffer, DataView, DOMException, AbortController, setTimeout, clearTimeout,
     document: { body, head: new Element(), querySelector: () => el('bar'), getElementById: el, createElement: () => new Element() },
     ...(withHistory ? { history } : {}), matchMedia: () => media, addEventListener: (type, callback) => listeners.set(type, callback), scrollTo() {}, fetch });
   context.window = context;

@@ -2,13 +2,13 @@
 
 The release workflow uses the free [Pake CLI](https://github.com/tw93/Pake), pinned to 3.18.0 with an npm lockfile. Pake uses Tauri and the system WebView. Its [Output Exception](https://github.com/tw93/Pake/blob/main/LICENSE-EXCEPTION) permits distributing applications made through its standard configuration/packaging process under their own licence. Bouquet's existing licence is unchanged. Pake's licence and exception are included in the local frontend.
 
-| Platform | Architecture | Release files (RU and EN) |
+| Platform | Architecture | Release files |
 | --- | --- | --- |
 | Windows | x64 | `.msi` |
 | macOS | Intel x64 / Apple Silicon arm64 | `.dmg` for each architecture |
 | Linux | x64 | `.deb`, `.AppImage` |
 
-Names include the app version, platform, architecture and initial language, e.g. `bouquet-X.Y.Z-desktop-windows-x64-en.msi`. Both built-in interface languages remain selectable. The locale variants share an application identifier; install one initial-language variant at a time.
+Names include the app version, platform and architecture, e.g. `bouquet-X.Y.Z-desktop-windows-x64.msi`. Each package chooses the first supported system/WebView language (RU or EN), with English fallback. Settings can override the language for the current session. Hello is excluded from all packages.
 
 ## Local build
 
@@ -16,8 +16,7 @@ Install Node.js 22+, Python 3.10+, Rust through rustup, and [Tauri's native buil
 
 ```sh
 npm ci --prefix desktop --no-audit --no-fund
-python3 scripts/build_desktop.py --locale en --output dist/desktop-en
-python3 scripts/build_desktop.py --locale ru --output dist/desktop-ru
+python3 scripts/build_desktop.py --output dist/desktop
 ```
 
 Installers and their checksum fragments appear under each output's `artifacts/` directory. Pake's JSON result is saved as `pake-result.json`; its logs go to stderr. Native compilation downloads build dependencies. It needs no Pake account or paid packaging service. The nested npm install layout lets Pake reuse the locked Tauri CLI rather than install a second toolchain in its temporary workspace. Rust uses the Cargo.lock shipped by Pake; binaries are not claimed to be bit-for-bit reproducible across toolchain/OS changes.
@@ -25,14 +24,14 @@ Installers and their checksum fragments appear under each output's `artifacts/` 
 To inspect only the exact frontend and Pake configuration without Node/Rust dependencies:
 
 ```sh
-python3 scripts/build_desktop.py --locale en --prepare-only --output dist/desktop-preview
+python3 scripts/build_desktop.py --prepare-only --output dist/desktop-preview
 ```
 
-The script rejects unexpected files or symlinks inside its generated frontend directory. Use a separate output directory for each language. Do not point Pake at the repository or at the general `dist/` directory.
+The script rejects unexpected files or symlinks inside its generated frontend directory. Do not point Pake at the repository or at the general `dist/` directory.
 
 ## Release
 
-A matching `vX.Y.Z` tag starts the existing web build/tests and eight desktop jobs: two languages on Windows, Linux and both Mac architectures. Each desktop job verifies Pake's JSON output, all requested package formats, nonempty artifacts and the reported architecture. The release waits for every desktop job; incomplete builds cannot silently publish a partial set. SHA-256 fragments are verified and combined with the web/mobile checksums into the release's `SHA256SUMS.txt`. Pages deployment remains independent of the desktop jobs.
+A matching `vX.Y.Z` tag starts the existing web build/tests and four desktop jobs: Windows, Linux and both Mac architectures. Each desktop job verifies Pake's JSON output, all requested package formats, nonempty artifacts and the reported architecture. The release waits for every desktop job; incomplete builds cannot silently publish a partial set. SHA-256 fragments are verified and combined with the web/mobile checksums into the release's `SHA256SUMS.txt`. Pages deployment remains independent of the desktop jobs.
 
 For a trial build, manually run **Test, build and release** in Actions with **desktop** enabled. This produces downloadable artifacts without a GitHub Release or Pages deployment. Standard GitHub-hosted runners are [free for public repositories](https://docs.github.com/en/actions/reference/runners/github-hosted-runners#standard-github-hosted-runners-for-public-repositories); private repositories use their account's Actions allowance/billing.
 
