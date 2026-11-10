@@ -13,6 +13,7 @@ To use offline, download `bouquet-X.Y.Z-en.zip` or `bouquet-X.Y.Z-ru.zip`, extra
 - Search words, `"exact phrases"`, `-exclusions` and `column:value`.
 - Follow declared SQLite relationships with the 🔗 button.
 - Read large SQLite databases progressively.
+- Install a desktop build for Windows, macOS or Linux from Releases; local files stay on your computer. [Build details](docs/DESKTOP.md).
 - Expand tables edge to edge with the button in the table header; exit with the same button or Esc.
 - Switch languages and themes, or load JavaScript plugins in Settings.
 

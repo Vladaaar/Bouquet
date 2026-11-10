@@ -5,6 +5,12 @@ on:
     branches: [main, master]
     tags: ['v*']
   pull_request:
+  workflow_dispatch:
+    inputs:
+      desktop:
+        description: Build desktop installers without publishing a release
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -33,6 +39,10 @@ jobs:
           else
             python3 scripts/build.py
           fi
+      - name: Validate desktop frontend preparation
+        run: |
+          python3 scripts/build_desktop.py --locale ru --prepare-only --output dist/desktop-check-ru
+          python3 scripts/build_desktop.py --locale en --prepare-only --output dist/desktop-check-en
       - uses: actions/upload-artifact@v7
         with:
           name: release-ru
@@ -63,9 +73,69 @@ jobs:
         with:
           path: dist/site
 
+  desktop:
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.desktop)
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        locale: [ru, en]
+        target:
+          - runner: windows-2022
+            name: windows-x64
+          - runner: ubuntu-22.04
+            name: linux-x64
+          - runner: macos-15-intel
+            name: macos-x64
+          - runner: macos-15
+            name: macos-arm64
+    runs-on: ${{ matrix.target.runner }}
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libssl-dev librsvg2-dev libayatana-appindicator3-dev patchelf libfuse2
+      - name: Prepare Rust toolchain
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+      - name: Install pinned Pake CLI
+        run: npm ci --prefix desktop --no-audit --no-fund
+      - name: Build local desktop application
+        env:
+          BOUQUET_LOCALE: ${{ matrix.locale }}
+          RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+        run: |
+          python3 scripts/build_desktop.py --locale "$BOUQUET_LOCALE" --tag "$RELEASE_TAG" --output dist/desktop
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-desktop-${{ matrix.target.name }}-${{ matrix.locale }}
+          path: dist/desktop/artifacts/*
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: desktop-diagnostics-${{ matrix.target.name }}-${{ matrix.locale }}
+          path: dist/desktop/pake-result.json
+          if-no-files-found: ignore
+
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: build
+    needs: [build, desktop]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -75,18 +145,21 @@ jobs:
           pattern: release-*
           merge-multiple: true
           path: dist
+      - name: Verify and combine release checksums
+        working-directory: dist
+        run: |
+          for manifest in SHA256SUMS*.txt; do
+            sha256sum --check "$manifest"
+          done
+          sha256sum bouquet-*.zip bouquet-*.html bouquet-*.msi bouquet-*.dmg bouquet-*.deb bouquet-*.AppImage > SHA256SUMS.txt
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          release_version="${RELEASE_TAG#v}"
           gh release create "$RELEASE_TAG" \
-            "dist/bouquet-$release_version-ru.zip" \
-            "dist/bouquet-$release_version-en.zip" \
-            "dist/bouquet-$release_version-mobile-ru.html" \
-            "dist/bouquet-$release_version-mobile-en.html" \
+            dist/bouquet-* \
             dist/SHA256SUMS.txt \
             --verify-tag --title "Bouquet $RELEASE_TAG" --notes ""
 

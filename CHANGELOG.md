@@ -1,13 +1,15 @@
 # Release notes / История изменений
 
-## [Unreleased]
+## [1.3.0] - 2026-11-10
 
 ### Русский
 
+- Добавлены релизные десктопные сборки Pake: Windows x64, macOS Intel/Apple Silicon, Linux x64, RU/EN. Упакован локальный интерфейс с запретом удалённых веб-запросов; все пакеты включены в общие SHA-256.
 - Встроенный полноэкранный режим таблицы: кнопка справа в головке скрывает шапку, поиск, статус и отступы, сохраняя индексы и пагинацию. Выход кнопкой или Esc; текущие данные и состояние просмотра сохраняются.
 
 ### English
 
+- Added Pake desktop release builds for Windows x64, macOS Intel/Apple Silicon and Linux x64, in RU/EN. The bundled local frontend blocks remote web requests; all packages are covered by the release SHA-256 manifest.
 - Built-in full-screen table mode: the upper-right header button hides the application header, search, status and outer spacing while keeping row indices and pagination. Exit with the button or Esc; current data and viewing state are preserved.
 
 ## [1.2.2] - 2026-11-05

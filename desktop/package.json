@@ -1,0 +1,8 @@
+{
+  "name": "bouquet-desktop-build",
+  "private": true,
+  "description": "Pinned build tool only; not application runtime JavaScript",
+  "dependencies": {
+    "pake-cli": "3.18.0"
+  }
+}
