@@ -32,6 +32,14 @@ The status row contains only **Found · Rows scanned · Total rows**. Unknown to
 
 Search supports words, `"exact phrases"`, `-exclusions` and `column:value`. Enter applies immediately; clearing the field returns to the first unfiltered page. `/` focuses search; arrow keys change pages outside input fields. SQLite 🔗 buttons follow declared foreign keys in either direction.
 
+## Full-screen table
+
+Use the expand button in the upper-right corner of the table header. The table fills the browser viewport, edge to edge: the application header, search, status/notices and outer spacing disappear. Row indices, scrolling, expandable cells and pagination remain available. The control stays visible when scrolling the table in either direction. Exit with the same button or **Esc**.
+
+Toggling preserves the current query, page, expanded cells and scroll position without rebuilding the table or rereading data. Pagination and empty results keep the mode active. Leaving the viewer, replacing the table renderer or a read error restores the normal layout. `/` does not focus the hidden search field while full screen is active; exit first to change the query.
+
+This built-in feature lives in `modules/table.js`, alongside the table styles and rendering. It uses a viewport layout rather than the browser Fullscreen API, so browser tabs and controls remain available. A class on `#app` controls the shell; a stage observer clears the mode when the table is removed. No separate plugin or setting is needed. Button tooltips and accessible names follow the interface language.
+
 ## Formats
 
 - SQLite: up to 100 MiB loads into memory by default; larger files use progressive reading. Change the mode in Settings. No SQL execution, editing, views or WAL support; open a consistent standalone database.

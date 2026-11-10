@@ -13,6 +13,7 @@ To use offline, download `bouquet-X.Y.Z-en.zip` or `bouquet-X.Y.Z-ru.zip`, extra
 - Search words, `"exact phrases"`, `-exclusions` and `column:value`.
 - Follow declared SQLite relationships with the 🔗 button.
 - Read large SQLite databases progressively.
+- Expand tables edge to edge with the button in the table header; exit with the same button or Esc.
 - Switch languages and themes, or load JavaScript plugins in Settings.
 
 Want to create a plugin? Start with [hello.js](modules/hello.js): load it through **Settings → Other plugins → Add .js plugin**, then open **👋 Hello** in Settings. It adds a small section, reacts to language changes and returns to the current file without resetting it. The example is included but is only enabled automatically in the mobile build.

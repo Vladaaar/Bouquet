@@ -1,5 +1,15 @@
 # Release notes / История изменений
 
+## [Unreleased]
+
+### Русский
+
+- Встроенный полноэкранный режим таблицы: кнопка справа в головке скрывает шапку, поиск, статус и отступы, сохраняя индексы и пагинацию. Выход кнопкой или Esc; текущие данные и состояние просмотра сохраняются.
+
+### English
+
+- Built-in full-screen table mode: the upper-right header button hides the application header, search, status and outer spacing while keeping row indices and pagination. Exit with the button or Esc; current data and viewing state are preserved.
+
 ## [1.2.2] - 2026-11-05
 
 ### Русский
