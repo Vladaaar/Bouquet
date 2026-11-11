@@ -21,7 +21,7 @@ To use offline, download `bouquet-X.Y.Z-html.zip`, extract it and open `index.ht
 
 Want to create a plugin? Start with [hello.js](https://github.com/Vladaaar/Bouquet/blob/main/modules/hello.js): load it through **Settings → Other plugins → Add .js plugin**, then open **👋 Hello** in Settings. It adds a small section, reacts to language changes and returns to the current file without resetting it. The example stays in the source repository and is excluded from every distribution.
 
-[Documentation: local server, formats, plugins and releases](docs/DEVELOPMENT.md) · [Detailed plugin API (Russian)](docs/DEVELOPMENT_RU.md#api-плагинов-версия-12)
+[Keyboard shortcuts](modules/shortcuts/README.md) · [Documentation: local server, formats, plugins and releases](docs/DEVELOPMENT.md) · [Detailed plugin API (Russian)](docs/DEVELOPMENT_RU.md#api-плагинов-версия-12)
 
 Bouquet is a viewer, with no SQL console or editing. Excel, CSV and text currently load into memory. If automatic CronosPro recovery fails, the dialog accepts a KOD table rather than a regular password.
 

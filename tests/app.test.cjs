@@ -19,6 +19,7 @@ function setup({ fetch = async () => ({ ok: false }), withSearch = true, withHis
       this.classList = { contains: value => this.className.split(' ').includes(value), toggle() {}, add() {}, remove() {} }; }
     replaceChildren(...children) { this.children = children; }
     appendChild(child) { this.children.push(child); }
+    insertBefore(child, reference) { const index = this.children.indexOf(reference); this.children.splice(index < 0 ? this.children.length : index, 0, child); }
     setAttribute(key, value) { this.attrs[key] = value; }
     removeAttribute(key) { delete this.attrs[key]; }
     focus() {} click() { if (!this.disabled) this.onclick?.(); }
@@ -683,7 +684,7 @@ test('format alternatives are exclusive, preserve query/table, and settings plug
   const group=el('formatGroups').children.find(node=>node.dataset.group==='format:example');
   const controls=group.children[1].children[0];controls.children[0].click();
   await until(()=>views.at(-1).rows[0].cells[0]==='value configured');
-  assert.equal(el('pluginList').children.some(card=>card.dataset.plugin==='example-settings'),true);
+  assert.equal(el('pluginList').children.some(card=>card.dataset.plugin==='example-settings'),false);
   assert.equal(el('pluginList').children.some(card=>['first','second'].includes(card.dataset.plugin)),false);
   assert.equal(group.children[2].children.filter(card=>card.children[2].checked).length,1);
   B.ui.setLanguage('language-en');assert.equal(group.children[1].children[0],controls);
@@ -709,5 +710,71 @@ test('appearance follows OS only in System and leaves the current data untouched
   assert.equal(el('themeSettings').children[0],control);
   assert.equal(el('themeList').children.length,2);
   assert.equal(el('themeList').children.filter(card=>card.children[2].checked).length,1);
-  assert.equal(el('pluginList').children.some(card=>card.dataset.plugin==='theme-settings'),true);
+  assert.equal(el('pluginList').children.some(card=>card.dataset.plugin==='theme-settings'),false);
+});
+
+test('first/last page actions jump directly for in-memory results and respect filtering', async () => {
+  const { context, choose, views, el, submit } = setup();
+  context.Bouquet.register({ kind: 'interpreter', id: 'edges', priority: 100, test: () => true,
+    parse() { return { tables: [{ name: 'rows', columns: ['value'], rows: Array.from({ length: 351 }, (_, n) => [String(n)]) }] }; } });
+  choose(); await until(() => views.length > 0);
+  await context.Bouquet.ui.actions.lastPage();
+  assert.equal(views.at(-1).page, 3); assert.equal(views.at(-1).rows.length, 51);
+  await context.Bouquet.ui.actions.firstPage(); assert.equal(views.at(-1).page, 0);
+  el('q').value = '350'; submit(); await until(() => views.at(-1).query === '350');
+  await context.Bouquet.ui.actions.lastPage(); assert.equal(views.at(-1).page, 0);
+  assert.equal(views.at(-1).rows[0].cells[0], '350');
+});
+test('last page discovers lazy cursors, reuses known cursors and Home interrupts traversal', async () => {
+  const { context, choose, views } = setup();
+  let reads = 0, total = 351;
+  context.Bouquet.register({ kind: 'interpreter', id: 'lazy-edges', priority: 100, test: () => true,
+    async open() { return { tables: [{ name: 'rows', columns: ['value'],
+      async read({ cursor, limit, signal }) {
+        reads++; await delay(2); context.Bouquet.util.checkAbort(signal);
+        const from = cursor || 0, end = Math.min(total, from + limit);
+        return { rows: Array.from({ length: end - from }, (_, n) => ({ n: from + n + 1, cells: [String(from + n)] })),
+          nextCursor: end, hasMore: end < total };
+      } }] }; } });
+  choose(); await until(() => views.length > 0);
+  const actions = context.Bouquet.ui.actions;
+  await actions.lastPage(); assert.equal(views.at(-1).page, 3); assert.equal(reads, 4);
+  await actions.firstPage(); const before = reads;
+  await actions.lastPage(); assert.equal(views.at(-1).page, 3); assert.equal(reads, before + 1);
+  total = 2000; choose('fresh.lazy'); await until(() => views.at(-1).page === 0 && views.at(-1).hasMore);
+  const traversal = actions.lastPage(); await until(() => views.at(-1).page === 1);
+  await actions.firstPage(); await traversal; await delay(15);
+  assert.equal(views.at(-1).page, 0);
+});
+
+test('group settings own localized descriptions without duplicate plugin cards, and footer groups stay last', () => {
+  const { context, el } = setup(), B = context.Bouquet;
+  const themeDescription = el('themesPanel').children.find(node => node.className === 'group-description');
+  assert.ok(themeDescription); assert.match(themeDescription.textContent, /Темы/);
+  const sqlite = el('formatGroups').children.find(node => node.dataset.group === 'format:sqlite');
+  const sqliteDescription = sqlite.children.find(node => node.className === 'group-description');
+  assert.match(sqliteDescription.textContent, /SQLite-файлов/);
+  assert.equal(el('pluginList').children.some(card => ['theme-settings', 'sqlite-settings'].includes(card.dataset.plugin)), false);
+  let mounts = 0;
+  B.register({ kind: 'plugin', category: 'settings', id: 'test-footer', targetGroup: 'test-footer', setup(ui) {
+    ui.addGroupSettings({ group: 'test-footer', position: 'last', label: { ru: 'Справка', en: 'Help' }, description: { ru: 'Описание', en: 'Description' },
+      mount(panel) { mounts++; panel.appendChild(context.document.createElement('table')); } });
+  } });
+  const section = el('settingsExtras').children.at(-1), controls = section.children[2].children[0];
+  assert.equal(section.children[0].textContent, 'Справка'); assert.equal(section.children[1].textContent, 'Описание');
+  B.ui.setLanguage('language-en');
+  assert.match(themeDescription.textContent, /Themes/); assert.match(sqliteDescription.textContent, /SQLite files/);
+  assert.equal(section.children[0].textContent, 'Help'); assert.equal(section.children[1].textContent, 'Description');
+  assert.equal(section.children[2].children[0], controls); assert.equal(mounts, 1);
+  assert.equal(el('pluginList').children.some(card => card.dataset.plugin === 'test-footer'), false);
+  assert.equal(B.plugins.find(plugin => plugin.id === 'test-footer').uiError, undefined);
+});
+test('section breadcrumbs use semantic labels even when button titles include keyboard hints', () => {
+  const { context, el } = setup(), ui = context.Bouquet.ui;
+  el('settingsButton').title = 'Настройки (Cmd + ,)';
+  el('settingsButton').click();
+  assert.equal(ui.activeLabel, 'Настройки'); assert.equal(pathLabel(el), 'Настройки');
+  ui.setLanguage('language-en');
+  el('settingsButton').title = 'Settings (Cmd + ,)'; ui.selectTab('explorer'); ui.selectTab('settings');
+  assert.equal(ui.activeLabel, 'Settings'); assert.equal(pathLabel(el), 'Settings');
 });

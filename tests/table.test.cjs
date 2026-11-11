@@ -25,11 +25,11 @@ function setup() {
       return this.parts?.[selector] || (selector === '.bq-wrap' ? this.children.find(child => child.className === 'bq-wrap') : null);
     }
   }
-  const app = new Element(), stage = new Element(), keys = {};
+  const app = new Element(), stage = new Element(), actions = {};
   let mutation;
   const context = vm.createContext({ console,
     document: { head: new Element(), getElementById: id => ({ app, stage })[id],
-      createElement: () => new Element(), addEventListener: (type, fn) => { keys[type] = fn; } },
+      createElement: () => new Element() },
     MutationObserver: class { constructor(fn) { mutation = fn; } observe() {} }
   });
   context.window = context;
@@ -37,19 +37,16 @@ function setup() {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), context);
   }
   const B = context.Bouquet, renderer = B.renderers.find(p => p.id === 'table');
-  renderer.setup();
+  renderer.setup({ actions, activeTab: 'explorer' });
   const render = (rows = [{ n: 101, cells: ['x'.repeat(60)] }]) => {
     renderer.render(stage, { table: { columns: ['value'] }, rows, highlight: B.util.escape });
     mutation();
     return stage.children[0].querySelector('.bq-controls').children[0];
   };
-  return { B, app, stage, render, mutation: () => mutation(), key(key) {
-    const event = { key, target: { tagName: 'BUTTON' }, preventDefault() { this.prevented = true; }, stopPropagation() { this.stopped = true; } };
-    keys.keydown(event); return event;
-  } };
+  return { B, app, stage, render, actions, mutation: () => mutation() };
 }
-test('table fullscreen toggles in place, keeps row indices and scroll, exits with Escape', () => {
-  const { app, stage, render, key } = setup(), button = render(), wrap = stage.children[0];
+test('table fullscreen toggles in place, keeps row indices and scroll, supports the shared exit action', () => {
+  const { app, stage, render, actions } = setup(), button = render(), wrap = stage.children[0];
   wrap.scrollTop = 120; wrap.scrollLeft = 50;
   assert.match(wrap.innerHTML, /class="bq-num">101/);
   assert.match(wrap.innerHTML, /data-long="1"/);
@@ -58,8 +55,7 @@ test('table fullscreen toggles in place, keeps row indices and scroll, exits wit
   assert.equal(button.attrs['aria-pressed'], 'true');
   assert.equal(stage.children[0], wrap);
   assert.equal(wrap.scrollTop, 120); assert.equal(wrap.scrollLeft, 50);
-  assert.equal(key('/').stopped, true);
-  assert.equal(key('Escape').prevented, true);
+  assert.equal(actions.fullscreen(false), true);
   assert.equal(app.classList.contains('bq-fullscreen'), false);
   assert.equal(button.focused, true);
   button.onclick(); button.onclick();

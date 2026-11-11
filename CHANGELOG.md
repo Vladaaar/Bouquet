@@ -4,6 +4,11 @@
 
 ### Русский
 
+- Модули настроек задают описания своих групп обычными абзацами без отдельных карточек. Читшит перенесён в последний блок настроек; ? открывает его, отдельная кнопка справки убрана.
+- Добавлен P для углового пина таблицы. Подсказки горячих клавиш больше не попадают в названия разделов и хлебные крошки.
+
+- Добавлен модуль горячих клавиш со списком команд по ?, подсказками кнопок и README. Стрелки прокручивают содержимое, [/] переключают страницы, Home/End переходят к первой/последней, включая прогрессивные курсорные таблицы.
+
 - Закреплён боковик с номерами строк; пин в левом верхнем углу одновременно закрепляет или открепляет шапку и боковик, сохраняя состояние при пагинации.
 
 - Единые сборки без разделения по языкам: начальный язык выбирается по настройкам системы/браузера (RU/EN, иначе EN). Ручное переключение сохранено.
@@ -11,6 +16,11 @@
 - Плагин-пример Hello исключён из всех дистрибутивов и остаётся доступен в репозитории исходников.
 
 ### English
+
+- Settings providers own plain group descriptions without separate cards. The cheat sheet is now the final Settings block, opened with ?; the dedicated help button is removed.
+- Added P for the table corner pin. Keyboard tooltip text no longer leaks into section labels or breadcrumbs.
+
+- Added a keyboard module with a ? cheat sheet, button hints and a README. Arrows scroll content, brackets switch pages, and Home/End navigate to the first/last page, including progressive cursor readers.
 
 - Row numbers now stay pinned horizontally; the upper-left pin toggles column headers and row numbers together and keeps its state across pagination.
 

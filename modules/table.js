@@ -65,16 +65,15 @@
     priority: 10,
     test(table) { return !table.plain && Array.isArray(table.columns); },
 
-    setup() {
-      document.addEventListener('keydown', e => {
-        if (fullscreen && e.key === 'Escape') {
-          e.preventDefault(); setFullscreen(false); button?.focus({ preventScroll: true });
-        }
-        // Do not let the application focus its hidden search field.
-        if (fullscreen && e.key === '/' && !/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) && !e.target.isContentEditable) {
-          e.preventDefault(); e.stopPropagation();
-        }
-      });
+    setup(ui) {
+      ui.actions.fullscreen = value => {
+        if (ui.activeTab !== 'explorer' || !host?.querySelector('.bq-wrap')) return false;
+        const next = value ?? !fullscreen;
+        if (next === fullscreen) return false;
+        setFullscreen(next);
+        if (!next) button?.focus({ preventScroll: true });
+        return true;
+      };
       Bouquet.on('tab:change', ({ id }) => { if (id !== 'explorer') setFullscreen(false); });
       // Pagination replaces the wrapper; navigation/errors remove it entirely.
       new MutationObserver(() => {

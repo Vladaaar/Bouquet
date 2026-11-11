@@ -17,6 +17,7 @@
   const MEMORY_LIMIT = 100 * 1024 * 1024;
   let opening, reading, debounce, selectionVersion = 0;
   let collectionId = 0, fileId = 0, changing = 0, restoring = false;
+  let pageJump = 0;
   const navigation = B.createNavigation(restoreRoute);
   const virtualName = entry => (entry.virtualPath || (entry.members ? entry.label || entry.name : entry.name)).replaceAll('\\', '/');
   const parentDirectory = path => path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
@@ -105,7 +106,7 @@
     else if (S.source?.noteKey) setStatus(S.source.noteKey);
     else { setStatus(null); status.textContent = S.source?.note || ''; status.hidden = !status.textContent; }
   }
-  function resetPages() { S.page = 0; S.cursors = [null]; S.total = undefined; S.matches = undefined; S.summaryView = null; }
+  function resetPages() { pageJump++; S.page = 0; S.cursors = [null]; S.total = undefined; S.matches = undefined; S.summaryView = null; }
   const choose = (list, value) => list.filter(m => {
     try { return B.pluginEnabled(m) && m.test(value); } catch { return false; }
   }).sort((a, b) => (b.priority || 0) - (a.priority || 0))[0];
@@ -181,6 +182,7 @@
     });
   }
   function cancelContent() {
+    pageJump++;
     opening?.abort(); reading?.abort(); opening = reading = null; clearTimeout(debounce);
     S.opening = S.reading = false;
     B.ui.currentView = null; B.emit('view:reset');
@@ -390,7 +392,8 @@
       highlight: feature && query.trim() ? value => feature.highlight(value, query) : U.escape };
   }
 
-  async function paint() {
+  async function paint(jump) {
+    if (jump !== pageJump) pageJump++;
     B.emit('view:reset');
     reading?.abort(); clearTimeout(debounce);
     S.reading = false; paintFileState(); paintNavigation();
@@ -416,6 +419,7 @@
       $('prev').disabled = view.page === 0;
       $('next').disabled = !view.hasMore;
       sourceStatus();
+      return view;
     } catch (err) {
       if (request.signal.aborted) return;
       S.readError = err; setStatus('readFailed', { error: () => I.errorText(err) });
@@ -474,16 +478,25 @@
   clear.onclick = () => { q.value = ''; clear.hidden = true; S.query = ''; resetPages(); paint(); q.focus(); };
   $('prev').onclick = () => { if (S.page > 0) { S.page--; paint(); scrollTo({ top: 0, behavior: 'smooth' }); } };
   $('next').onclick = () => { if (!$('next').disabled) { S.page++; paint(); scrollTo({ top: 0, behavior: 'smooth' }); } };
-  addEventListener('keydown', e => {
-    if (B.ui.activeTab !== 'explorer') return;
-    const editing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName) || document.activeElement?.isContentEditable;
-    if (e.key === 'Escape' && document.activeElement === q) { q.blur(); }
-    else if (e.key === '/' && !editing && !form.hidden) { e.preventDefault(); q.focus(); }
-    else if (!pager.hidden && !editing) {
-      if (e.key === 'ArrowRight' && !$('next').disabled) $('next').click();
-      if (e.key === 'ArrowLeft' && !$('prev').disabled) $('prev').click();
+  async function pageEdge(last) {
+    if (B.ui.activeTab !== 'explorer' || S.location !== 'data' || !S.dataset || S.opening || (last && S.reading)) return;
+    const jump = ++pageJump;
+    let view = B.ui.currentView?.view;
+    if (!last) { S.page = 0; return paint(jump); }
+    if (!view?.hasMore) return;
+    const target = view.pages == null ? null : view.pages - 1;
+    const table = S.dataset.tables[S.active];
+    if (target != null && (!table.read || S.cursors[target] != null)) {
+      S.page = target; return paint(jump);
     }
-  });
+    // Cursor-based readers cannot seek to unseen pages. Keep the UI responsive
+    // and let any ordinary paint/reset/navigation cancel this traversal.
+    while (jump === pageJump && view?.hasMore) {
+      await new Promise(resolve => setTimeout(resolve, 0));
+      if (jump !== pageJump) return;
+      S.page++; view = await paint(jump);
+    }
+  }
   let dragDepth = 0;
   addEventListener('dragenter', e => { e.preventDefault(); if (++dragDepth) document.body.classList.add('dragging'); });
   addEventListener('dragover', e => e.preventDefault());
@@ -511,7 +524,7 @@
       showCollection(S.collection.name, S.collection.entries, S.error, true, S.collection.nameKey);
     }
   });
-  B.on('tab:change', paintHeader);
+  B.on('tab:change', () => { pageJump++; paintHeader(); });
   function refreshGroup(group) {
     if (S.collection && S.location === 'files') {
       S.collection.items = U.groupFileEntries(S.collection.entries); paint(); return;
@@ -550,6 +563,7 @@
   $('uploadFile').onclick = () => $('pickFile').click();
   $('addPlugin').onclick = () => $('pickModule').click();
   $('backLevel').onclick = goUp;
-  B.ui.actions = { openFile, openFiles, chooseFiles: () => $('pickFile').click(), refresh: paint, back: goUp };
+  B.ui.actions = { openFile, openFiles, chooseFiles: () => $('pickFile').click(), refresh: paint, back: goUp,
+    firstPage: () => pageEdge(false), lastPage: () => pageEdge(true) };
   form.hidden = !search(); paint(); B.ui.start(); scanFolder();
 })();

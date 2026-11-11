@@ -67,11 +67,12 @@
       <p id="pluginStatus" role="status" aria-live="polite"></p>
       <div class="plugin-list" id="pluginList"></div>
     </section>
-    <div class="settings-card" id="readingSettings" hidden>
+    <div class="reading-controls" id="readingSettings" hidden>
       <p id="interpreterInfo">Интерпретатор не выбран</p>
       <label><input id="progressive" type="checkbox" disabled> <span data-i18n="progressive">Прогрессивная загрузка</span></label>
       <p id="loadingHint">Выберите SQLite-файл</p>
     </div>
+    <div id="settingsExtras"></div>
     <footer class="sign"><a href="https://unit.link/vladaaar">@vladaaar, 2026</a></footer>
   </section>
   </main>
@@ -96,6 +97,7 @@
 <script src="modules/sqlite_full_load.js"></script>
 <script src="modules/search.js"></script>
 <script src="modules/links.js"></script>
+<script src="modules/shortcuts.js"></script>
 
 <script src="modules/themes.js"></script>
 <script src="modules/theme_settings.js"></script>

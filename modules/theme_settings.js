@@ -4,7 +4,10 @@
     kind: 'plugin', category: 'settings', targetGroup: 'theme', id: 'theme-settings',
     names: { ru: 'Настройки оформления', en: 'Appearance settings' },
     setup(ui) {
-      ui.addGroupSettings({ group: 'theme', mount(panel) {
+      ui.addGroupSettings({ group: 'theme', description: {
+        ru: 'Темы задают оформление интерфейса. Внешний вид следует системе или выбирается вручную: светлый либо тёмный.',
+        en: 'Themes control the interface appearance. Follow the system or choose a light or dark appearance manually.'
+      }, mount(panel) {
         const fieldset = document.createElement('fieldset'); fieldset.className = 'appearance-control';
         const legend = document.createElement('legend'); ui.i18n.bind(legend, 'appearance'); fieldset.appendChild(legend);
         const choices = [];

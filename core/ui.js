@@ -42,7 +42,7 @@
       button.setAttribute('aria-label', label);
       button.setAttribute('aria-controls', panel.id);
       button.onclick = () => UI.selectTab(id);
-      tabs.set(id, { button, panel, labelKey, labelNode });
+      tabs.set(id, { button, panel, label, labelKey, labelNode });
       panel.hidden = id !== UI.activeTab;
       if (!panel.hidden) button.setAttribute('aria-current', 'page');
       mount?.(panel, UI);
@@ -52,7 +52,7 @@
       if (id === 'plugins') id = 'settings'; // Legacy plugins now share the settings page.
       if (!tabs.has(id)) throw I.error('Неизвестная вкладка: {id}', { id });
       UI.activeTab = id;
-      UI.activeLabel = tabs.get(id).button.title;
+      UI.activeLabel = tabs.get(id).label;
       for (const [key, { button, panel }] of tabs) {
         panel.hidden = key !== id;
         if (key === id) button.setAttribute('aria-current', 'page');
@@ -76,8 +76,17 @@
     },
     selectPlugin(group, id) { B.selectPlugin(group, id); },
     setPluginOptions(id, options) { B.setPluginOptions(id, options); },
-    addGroupSettings({ group, label, mount }) {
-      const target = ensureGroup(group, label);
+    addGroupSettings({ group, label, description, position, mount }) {
+      const target = ensureGroup(group, label, position);
+      if (description != null) {
+        target.description = description;
+        if (!target.descriptionNode) {
+          target.descriptionNode = document.createElement('p');
+          target.descriptionNode.className = 'group-description';
+          target.section.insertBefore(target.descriptionNode, target.settings);
+        }
+        target.descriptionNode.textContent = groupText(description);
+      }
       const panel = document.createElement('div'); panel.className = 'group-settings';
       target.settings.appendChild(panel);
       mount(panel, UI); paintPlugins();
@@ -101,15 +110,20 @@
     themeStyle.textContent = (plugin?.css || '') + (plugin?.states?.[state] || '');
   }
   darkMedia?.addEventListener('change', () => { if (UI.appearance === 'system') applyTheme(); });
-  function ensureGroup(group, label) {
+  const groupText = value => typeof value === 'string' ? value : value?.[I.locale] || value?.[I.locale.split('-')[0]] || value?.en || value?.ru || '';
+  function ensureGroup(group, label, position) {
     if (!groups.has(group)) {
       const section = document.createElement('section'); section.className = 'settings-section'; section.dataset.group = group;
-      const title = document.createElement('h2'); title.textContent = label || group.replace(/^format:/, '');
+      const title = document.createElement('h2'); title.textContent = groupText(label) || group.replace(/^format:/, '');
       const settings = document.createElement('div'), list = document.createElement('div'); list.className = 'plugin-list';
-      section.appendChild(title); section.appendChild(settings); section.appendChild(list); $('formatGroups').appendChild(section);
+      section.appendChild(title); section.appendChild(settings); section.appendChild(list);
+      $(position === 'last' ? 'settingsExtras' : 'formatGroups').appendChild(section);
       groups.set(group, { section, list, settings, title });
     }
-    if (label && groups.get(group).title) groups.get(group).title.textContent = label;
+    if (label != null) {
+      groups.get(group).label = label;
+      if (groups.get(group).title) groups.get(group).title.textContent = groupText(label);
+    }
     return groups.get(group);
   }
   UI.addTab({ id: 'explorer', label: I.t('home'), labelKey: 'home', panel: $('explorerPanel'), button: $('homeButton') });
@@ -127,10 +141,14 @@
       if (group && B.groupPlugins(group).length > 1) ensureGroup(group);
     }
     for (const [group, target] of groups) {
+      if (target.title && target.label != null) target.title.textContent = groupText(target.label);
+      if (target.descriptionNode) target.descriptionNode.textContent = groupText(target.description);
       target.list.replaceChildren();
       target.section.hidden = B.groupPlugins(group).length < 2 && !target.settings.children.length;
     }
     for (const plugin of B.plugins) {
+      // Settings providers describe their group alongside their controls.
+      if (plugin.category === 'settings' && !plugin.uiError) continue;
       const theme = plugin.category === 'theme', language = plugin.category === 'language';
       const group = B.pluginGroup(plugin), selectable = group && B.groupPlugins(group).length > 1;
       const card = document.createElement('article'); card.className = 'plugin-card';
@@ -158,6 +176,7 @@
     for (const [id, { button, panel, labelKey, labelNode }] of tabs) {
       if (!labelKey) continue;
       const label = I.t(labelKey);
+      tabs.get(id).label = label;
       if (labelNode) labelNode.textContent = label;
       button.title = label; button.setAttribute('aria-label', label); panel.setAttribute('aria-label', label);
       if (id === UI.activeTab) UI.activeLabel = label;
