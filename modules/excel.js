@@ -21,6 +21,7 @@
   }
   B.register({
     kind: 'interpreter', id: 'excel', name: 'Excel (XLS/XLSX)', priority: 40,
+    loadingModes: ['memory'],
     test: ({ ext }) => ['xls', 'xlsx'].includes(String(ext).toLowerCase()),
     async parse({ buffer, name, signal }) {
       U.checkAbort(signal);

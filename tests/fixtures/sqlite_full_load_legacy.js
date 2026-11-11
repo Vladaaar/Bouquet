@@ -1,3 +1,4 @@
+/* Frozen independent regression reference; test-only, never bundled. */
 /* Bouquet · модуль sqlite — чтение файла SQLite 3 напрямую, без зависимостей и сети.
    Разбирает заголовок, b-дерево страниц, формат записи и страницы переполнения. */
 (function () {

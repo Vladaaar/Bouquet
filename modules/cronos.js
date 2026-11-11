@@ -29,28 +29,30 @@
     } finally { await stream.cancel().catch(() => {}); }
   }
   class Datafile {
-    constructor(dat, tad) {
-      this.dat = dat; this.tad = new DataView(tad.buffer, tad.byteOffset, tad.length);
-      const h = new Reader(dat); if (text(h.take(8)) !== 'CroFile') throw corrupt(); h.u16();
+    constructor(dat, tad, header) {
+      this.dat = U.cachedSource(dat); this.tad = U.cachedSource(tad);
+      const h = new Reader(header); if (text(h.take(8)) !== 'CroFile') throw corrupt(); h.u16();
       this.version = text(h.take(5)); this.encoding = h.u16(); this.block = h.u16();
       if (!['01.02', '01.03', '01.04', '01.05', '01.11'].includes(this.version)) throw error('Не поддерживается версия CronosPro ' + this.version, 'Unsupported CronosPro version ' + this.version);
       this.v4 = this.version === '01.11'; this.wide = ['01.03', '01.05', '01.11'].includes(this.version);
       this.custom = this.v4 || ['01.04', '01.05'].includes(this.version);
       this.header = this.v4 ? 16 : 8; this.step = this.wide ? 16 : 12;
-      if (!this.block || tad.length < this.header || (tad.length - this.header) % this.step) throw corrupt();
-      this.count = (tad.length - this.header) / this.step;
+      if (!this.block || tad.size < this.header || (tad.size - this.header) % this.step) throw corrupt();
+      this.count = (tad.size - this.header) / this.step;
     }
-    slice(offset, length) { if (!Number.isSafeInteger(offset) || offset < 0 || length < 0 || length > MAX || offset + length > this.dat.length) throw corrupt(); return this.dat.subarray(offset, offset + length); }
-    raw(id) {
+    async slice(offset, length, signal) { if (!Number.isSafeInteger(offset) || offset < 0 || length < 0 || length > MAX || offset + length > this.dat.size) throw corrupt(); return this.dat.read(offset, length, { signal }); }
+    async raw(id, signal) {
       if (!Number.isInteger(id) || id < 1 || id > this.count) throw corrupt();
       const p = this.header + (id - 1) * this.step;
-      let offset = this.wide ? this.tad.getBigUint64(p, true) : BigInt(this.tad.getUint32(p, true));
-      let length = this.tad.getUint32(p + (this.wide ? 8 : 4), true);
+      const bytes = await this.tad.read(p, this.step, { signal });
+      const index = new DataView(bytes.buffer, bytes.byteOffset, bytes.length);
+      let offset = this.wide ? index.getBigUint64(0, true) : BigInt(index.getUint32(0, true));
+      let length = index.getUint32(this.wide ? 8 : 4, true);
       if (length === 0xffffffff) return null;
       const flags = this.v4 ? Number(offset >> 56n) : length >>> 24;
       if (this.v4) { offset &= 0x00ffffffffffffffn; if (flags === 2 || flags === 3) return null; }
       else length &= 0x00ffffff;
-      let data = this.slice(Number(offset), length);
+      let data = await this.slice(Number(offset), length, signal);
       if (!length || flags) return data;
       const pointer = this.wide ? 8 : 4, header = pointer + 4;
       if (length < header) throw corrupt();
@@ -61,14 +63,14 @@
       let filled = first.length; const seen = new Set();
       while (filled < size) {
         if (!next || seen.has(next)) throw corrupt(); seen.add(next);
-        data = this.slice(next, this.block); const d = new DataView(data.buffer, data.byteOffset, data.length);
+        data = await this.slice(next, this.block, signal); const d = new DataView(data.buffer, data.byteOffset, data.length);
         next = this.wide ? Number(d.getBigUint64(0, true)) : d.getUint32(0, true);
         const part = data.subarray(pointer, pointer + size - filled); if (!part.length) throw corrupt(); out.set(part, filled); filled += part.length;
       }
       return out;
     }
     async record(id, key, signal) {
-      U.checkAbort(signal); let bytes = this.raw(id); if (!bytes?.length) return bytes;
+      U.checkAbort(signal); let bytes = await this.raw(id, signal); if (!bytes?.length) return bytes;
       if (this.encoding & 1) { const kod = this.custom ? key : DEFAULT; bytes = Uint8Array.from(bytes, (b, i) => (kod[b] - i - id) & 255); }
       if (bytes.length < 11 || bytes.at(-3) !== 0 || bytes.at(-2) !== 0 || bytes.at(-1) !== 2) return bytes;
       const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.length), parts = []; let p = 0, size = 0;
@@ -135,7 +137,7 @@
     for (const file of files) {
       if (!(file.encoding & 1) || !file.custom) continue;
       for (let id = 1; id <= Math.min(file.count, structure ? file.count : 10000); id++) {
-        U.checkAbort(signal); const data = file.raw(id);
+        U.checkAbort(signal); const data = await file.raw(id, signal);
         if (data?.length) {
           if (structure) { for (let i = 0; i < data.length; i++) counts[(i + id) & 255][data[i]]++; }
           else if (data.length > 11) { counts[(id + 3) & 255][data[3]]++; counts[(id + 10) & 255][data[2]]++; }
@@ -153,7 +155,7 @@
   }
   let requestKey;
   B.register({
-    kind: 'interpreter', id: 'cronos', name: 'CronosPro', priority: 60,
+    kind: 'interpreter', id: 'cronos', name: 'CronosPro', priority: 60, loadingModes: ['memory', 'progressive'],
     test: ({ name }) => /(?:^|[\\/])cro(?:bank|stru|index)\.(?:dat|tad)$/i.test(name || ''),
     groupFiles(entries) {
       const groups = new Map(), component = /^(.*\/)?cro(?:bank|stru|index)\.(?:dat|tad)$/i;
@@ -210,8 +212,8 @@
       if (missing.length) { const e = error('Недостаточно файлов CronosPro: ' + missing.join(', ') + '. Выберите CroStru.dat, CroStru.tad, CroBank.dat и CroBank.tad вместе.', 'Missing CronosPro files: ' + missing.join(', ') + '. Select CroStru.dat, CroStru.tad, CroBank.dat and CroBank.tad together.'); e.missingFiles = missing; throw e; }
       async function pair(stem) {
         const entries = [find('Cro' + stem + '.dat'), find('Cro' + stem + '.tad')]; if (entries.some(e => !e)) return null;
-        const [dat, tad] = await Promise.all(entries.map(async entry => { const src = entry.name === name ? source : await entry.open(signal); U.checkAbort(signal); return src.read(0, src.size, { signal }); }));
-        return new Datafile(dat, tad);
+        const [dat, tad] = await Promise.all(entries.map(async entry => { const src = entry.name === name ? source : await entry.open(signal); U.checkAbort(signal); return src; }));
+        return new Datafile(dat, tad, await dat.read(0, Math.min(32, dat.size), { signal }));
       }
       let stru = await pair('Stru'), bank = await pair('Bank'), index = await pair('Index'), definitions, key = DEFAULT;
       async function attempt(candidate) {

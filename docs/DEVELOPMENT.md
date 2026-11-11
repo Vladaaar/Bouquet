@@ -46,12 +46,18 @@ Toggling preserves the current query, page, expanded cells and scroll position w
 
 This built-in feature lives in `modules/table.js`, alongside the table styles and rendering. It uses a viewport layout rather than the browser Fullscreen API, so browser tabs and controls remain available. A class on `#app` controls the shell; a stage observer clears the mode when the table is removed. No separate plugin or setting is needed. Button tooltips and accessible names follow the interface language.
 
+## File loading
+
+The [File loading module](../modules/file_loading/README.md) owns the global threshold, default 100 MB (1024² bytes per MB). The only control is **Load files up to __ MB entirely into memory**. For dual-mode formats, bytes are cached once at or below it and read progressively above it. Zero always requires progressive reading. A format supporting only one mode ignores any positive threshold: full-only formats still load completely even above it. Changing the setting preserves the current query/table and resets pagination. The byte-loading policy is shared; parsers still implement format-specific progressive access. SQLite uses one parser in both modes.
+
 ## Formats
 
-- SQLite: up to 100 MiB loads into memory by default; larger files use progressive reading. Change the mode in Settings. No SQL execution, editing, views or WAL support; open a consistent standalone database.
+- SQLite: one parser uses preloaded bytes or progressive ranges according to the global File loading threshold (default 100 MB, inclusive). Change the threshold in Settings. No SQL execution, editing, views or WAL support; open a consistent standalone database.
 - Excel: uses the bundled SheetJS library, loaded on demand. Worksheets become tables; the first row stays data. Formulas use cached values and are not recalculated.
 - CronosPro: choose CroStru and CroBank DAT/TAD pairs together; CroIndex is optional. Components are grouped by directory. If automatic KOD recovery fails, the dialog accepts a KOD table, not a regular password.
-- CSV, TSV and text: currently parsed fully in memory.
+- CSV, TSV and text: progressive block reads, Unicode/BOM support, byte cursors, filtering and cancellation. CSV preserves quoted multiline fields; columns expand when wider rows appear. One logical record is limited to 64 MiB.
+- CronosPro reads DAT/TAD headers, index entries and record ranges progressively with bounded caches. KOD recovery can require additional scanning. Each component follows the threshold separately.
+- Excel requires full loading through SheetJS. Any positive threshold permits it regardless of file size; zero reports that progressive reading is unavailable. HTTP without Range still downloads a full Blob for every format.
 
 ## Plugin groups and appearance
 
@@ -61,7 +67,7 @@ The default `theme-default` plugin contains `states.light` and `states.dark` CSS
 
 `ui.selectPlugin(group, id)` / `Bouquet.selectPlugin(group, id)` selects `language`, `theme` or `format:<format>`. Without a manual format choice the existing compatibility/priority/SQLite size rules apply; the switch reflects the current reader. A manual choice persists for the page session. Select `null` for a format group to return to automatic selection. Changing the current reader preserves the query/table and resets pagination. `ui.setPluginOptions(id, patch)` merges `plugin.options`; readers consume their own parameters. Changing an active reader's options reopens it; inactive-reader changes do not.
 
-Group-settings plugins use `kind: 'plugin', category: 'settings', targetGroup: 'theme'` (or a format group). In `setup(ui)`, call `ui.addGroupSettings({group, label, description, position, mount})`. The block mounts once and survives language/theme changes. `label` and `description` accept a string or a locale map such as `{ru: 'Описание', en: 'Description'}`; descriptions render as plain text below the group heading. `position: 'last'` creates a group in the final Settings area, as used by the keyboard module. Group-setting providers have no separate cards; see [shortcuts/README.md](../modules/shortcuts/README.md). Use `ui.selectPlugin` and `ui.setPluginOptions` to control group members. `targetGroup` documents the target; mounting is explicit. See [theme_settings.js](../modules/theme_settings.js), [sqlite_settings.js](../modules/sqlite_settings.js) and the [full example](DEVELOPMENT_RU.md#группы-и-плагины-настроек).
+Group-settings plugins use `kind: 'plugin', category: 'settings', targetGroup: 'theme'` (or a format group). In `setup(ui)`, call `ui.addGroupSettings({group, label, description, position, mount})`. The block mounts once and survives language/theme changes. `label` and `description` accept a string or a locale map such as `{ru: 'Описание', en: 'Description'}`; descriptions render as plain text below the group heading. `position: 'last'` creates a group in the final Settings area, as used by the keyboard module. Group-setting providers have no separate cards; see [shortcuts/README.md](../modules/shortcuts/README.md). Use `ui.selectPlugin` and `ui.setPluginOptions` to control group members. `targetGroup` documents the target; mounting is explicit. See [theme_settings.js](../modules/theme_settings.js), [file_loading.js](../modules/file_loading.js) and the [full example](DEVELOPMENT_RU.md#группы-и-плагины-настроек).
 
 Events: `plugin:select` carries `{group, id}`, `plugin:configure` carries `{plugin, options}`, `appearance:change` carries `{mode}`. `ui.setTheme(id)` and `ui.setAppearance(mode)` also work directly. All choices are in memory until reload. Selection controls parsing/CSS; it does not undo arbitrary JavaScript or `setup` effects from already loaded trusted plugins.
 

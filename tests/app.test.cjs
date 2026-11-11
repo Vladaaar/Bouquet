@@ -22,6 +22,8 @@ function setup({ fetch = async () => ({ ok: false }), withSearch = true, withHis
     insertBefore(child, reference) { const index = this.children.indexOf(reference); this.children.splice(index < 0 ? this.children.length : index, 0, child); }
     setAttribute(key, value) { this.attrs[key] = value; }
     removeAttribute(key) { delete this.attrs[key]; }
+    setCustomValidity(text) { this.validationMessage = text; }
+    reportValidity() { return !this.validationMessage; }
     focus() {} click() { if (!this.disabled) this.onclick?.(); }
   }
   const elements = new Map();
@@ -46,7 +48,7 @@ function setup({ fetch = async () => ({ ok: false }), withSearch = true, withHis
   for (const f of ['core/bouquet.js', 'core/i18n.js', 'core/sources.js', 'core/files.js', 'core/navigation.js', ...(withSearch ? ['modules/search.js'] : [])]) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), context);
   const views = [];
   context.Bouquet.register({ kind: 'renderer', id: 'capture', priority: 100, test: () => true, render: (_, view) => views.push(view) });
-  for (const f of ['modules/themes.js', 'modules/theme_settings.js', 'modules/sqlite_settings.js', 'core/ui.js', 'core/app.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), context);
+  for (const f of ['modules/themes.js', 'modules/theme_settings.js', 'modules/file_loading.js', 'core/ui.js', 'core/app.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), context);
   const choose = (name = 'test.lazy', size) => {
     const file = Object.assign(new Blob(['data']), { name });
     if (size != null) Object.defineProperty(file, 'size', { value: size });
@@ -104,34 +106,24 @@ test('legacy parsers receive complete buffers and newest open wins', async () =>
   assert.equal(views.at(-1).total, 1);
 });
 
-test('SQLite auto mode boundary, manual toggle, query/table preservation and new-file reset', async () => {
-  const { el, context, views, choose, submit, select } = setup();
-  const opened = [];
-  const dataset = () => ({ tables: [0, 1].map(i => ({ name: 't' + i, columns: ['name'], rows: [['value']] })) });
-  for (const mode of ['progressive', 'memory']) {
-    context.Bouquet.register({ kind: 'interpreter', id: mode, name: 'SQLite', priority: 100,
-      format: 'sqlite', loadingMode: mode, test: () => true,
-      async open() { opened.push(mode); await delay(1); return dataset(); }
-    });
-  }
-  choose('boundary.db', 100 * 1024 * 1024);
-  await until(() => !el('progressive').disabled);
-  assert.equal(opened.at(-1), 'memory'); assert.equal(el('progressive').checked, false);
-  assert.equal(views.length, 0);
-  select(1); await until(() => views.length > 0);
-  el('q').value = 'value'; submit(); await until(() => views.at(-1).query === 'value');
-  el('progressive').checked = true; el('progressive').onchange();
-  await until(() => !el('progressive').disabled && opened.at(-1) === 'progressive');
-  assert.equal(views.at(-1).query, 'value'); assert.equal(views.at(-1).table.name, 't1');
-  choose('small.db', 100); await until(() => !el('progressive').disabled);
+test('global file-loading threshold includes the boundary and reopens the current file preserving its query/table', async () => {
+  const { el, context, views, choose, submit } = setup();
+  const opened = [], B = context.Bouquet, loader = B.features['file-loading'];
+  B.register({ kind: 'interpreter', id: 'policy-sqlite', format: 'sqlite', loadingModes: ['memory', 'progressive'], priority: 100,
+    test: () => true, open({ loadingMode }) { opened.push(loadingMode); return { tables: [{ name: 'records', columns: ['value'],
+      rows: Array.from({ length: 101 }, (_, n) => ['keep ' + n]) }] }; } });
+  choose('boundary.db', 100 * 1024 * 1024); await until(() => views.length > 0);
   assert.equal(opened.at(-1), 'memory');
-  choose('large.db', 100 * 1024 * 1024 + 1); await until(() => !el('progressive').disabled);
-  assert.equal(opened.at(-1), 'progressive'); assert.equal(el('progressive').checked, true);
-  el('progressive').checked = false; el('progressive').onchange();
-  await until(() => !el('progressive').disabled && opened.at(-1) === 'memory');
-  assert.equal(el('progressive').checked, false);
+  el('q').value = 'keep'; submit(); await until(() => views.at(-1).query === 'keep');
+  el('next').click(); await until(() => views.at(-1).page === 1);
+  loader.setMemoryLimitMB(99); await until(() => opened.length === 2 && views.at(-1).page === 0);
+  assert.equal(opened.at(-1), 'progressive'); assert.equal(views.at(-1).query, 'keep');
+  assert.equal(views.at(-1).table.name, 'records');
+  choose('small.db', 10); await until(() => opened.length === 3); assert.equal(opened.at(-1), 'memory');
+  choose('large.db', 100 * 1024 * 1024 + 1); await until(() => opened.length === 4);
+  assert.equal(opened.at(-1), 'progressive');
+  loader.setMemoryLimitMB(200); await until(() => opened.length === 5); assert.equal(opened.at(-1), 'memory');
 });
-
 
 test('header navigation preserves preview, query, pagination and scroll', async () => {
   const { el, context, views, choose, submit, select } = setup();
@@ -751,10 +743,10 @@ test('group settings own localized descriptions without duplicate plugin cards, 
   const { context, el } = setup(), B = context.Bouquet;
   const themeDescription = el('themesPanel').children.find(node => node.className === 'group-description');
   assert.ok(themeDescription); assert.match(themeDescription.textContent, /Темы/);
-  const sqlite = el('formatGroups').children.find(node => node.dataset.group === 'format:sqlite');
-  const sqliteDescription = sqlite.children.find(node => node.className === 'group-description');
-  assert.match(sqliteDescription.textContent, /SQLite-файлов/);
-  assert.equal(el('pluginList').children.some(card => ['theme-settings', 'sqlite-settings'].includes(card.dataset.plugin)), false);
+  const loading = el('formatGroups').children.find(node => node.dataset.group === 'file-loading');
+  const loadingDescription = loading.children.find(node => node.className === 'group-description');
+  assert.match(loadingDescription.textContent, /порог/);
+  assert.equal(el('pluginList').children.some(card => ['theme-settings', 'file-loading'].includes(card.dataset.plugin)), false);
   let mounts = 0;
   B.register({ kind: 'plugin', category: 'settings', id: 'test-footer', targetGroup: 'test-footer', setup(ui) {
     ui.addGroupSettings({ group: 'test-footer', position: 'last', label: { ru: 'Справка', en: 'Help' }, description: { ru: 'Описание', en: 'Description' },
@@ -763,7 +755,7 @@ test('group settings own localized descriptions without duplicate plugin cards, 
   const section = el('settingsExtras').children.at(-1), controls = section.children[2].children[0];
   assert.equal(section.children[0].textContent, 'Справка'); assert.equal(section.children[1].textContent, 'Описание');
   B.ui.setLanguage('language-en');
-  assert.match(themeDescription.textContent, /Themes/); assert.match(sqliteDescription.textContent, /SQLite files/);
+  assert.match(themeDescription.textContent, /Themes/); assert.match(loadingDescription.textContent, /threshold/);
   assert.equal(section.children[0].textContent, 'Help'); assert.equal(section.children[1].textContent, 'Description');
   assert.equal(section.children[2].children[0], controls); assert.equal(mounts, 1);
   assert.equal(el('pluginList').children.some(card => card.dataset.plugin === 'test-footer'), false);

@@ -61,7 +61,7 @@ button{cursor:pointer;border:0;background:none}
 .upload-button:hover{background:color-mix(in srgb,var(--iris) 8%,var(--surface))}
 .content-panel{padding:32px clamp(20px,5vw,80px);overflow:auto}
 h1{font-size:28px;margin:0 0 12px}h2{font-size:18px;margin:0 0 14px}
-.content-panel>p,.settings-card p,.reading-controls p{color:var(--muted)}
+.content-panel>p,.settings-card p{color:var(--muted)}
 .action-button,.theme-button{border:1px solid var(--line);border-radius:var(--r-pill);padding:10px 18px;background:var(--surface)}
 .plugin-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:12px;margin-top:24px}
 .plugin-card,.settings-card{padding:20px;border:1px solid var(--line);border-radius:var(--r-box);background:var(--surface)}

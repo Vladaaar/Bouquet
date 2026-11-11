@@ -3,8 +3,7 @@
   const MAGIC = 'SQLite format 3\u0000';
   Bouquet.register({
     kind: 'interpreter', id: 'sqlite', name: 'SQLite', priority: 30,
-    format: 'sqlite', loadingMode: 'progressive',
-    names: { ru: 'SQLite — прогрессивное чтение', en: 'SQLite — progressive reading' },
+    format: 'sqlite', loadingModes: ['memory', 'progressive'],
     test({ ext, bytes }) {
       if (bytes && bytes.length >= 16) return Array.from(MAGIC).every((c, i) => bytes[i] === c.charCodeAt(0));
       return ['db', 'sqlite', 'sqlite3', 'db3'].includes(ext);

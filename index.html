@@ -67,11 +67,6 @@
       <p id="pluginStatus" role="status" aria-live="polite"></p>
       <div class="plugin-list" id="pluginList"></div>
     </section>
-    <div class="reading-controls" id="readingSettings" hidden>
-      <p id="interpreterInfo">Интерпретатор не выбран</p>
-      <label><input id="progressive" type="checkbox" disabled> <span data-i18n="progressive">Прогрессивная загрузка</span></label>
-      <p id="loadingHint">Выберите SQLite-файл</p>
-    </div>
     <div id="settingsExtras"></div>
     <footer class="sign"><a href="https://unit.link/vladaaar">@vladaaar, 2026</a></footer>
   </section>
@@ -89,19 +84,18 @@
 <script src="core/navigation.js"></script>
 
 <!-- Модули. Файла нет — строка просто игнорируется, ядро останется рабочим. -->
+<script src="modules/file_loading.js"></script>
 <script src="modules/table.js"></script>
 <script src="modules/csv.js"></script>
 <script src="modules/excel.js"></script>
 <script src="modules/cronos.js"></script>
 <script src="modules/sqlite.js"></script>
-<script src="modules/sqlite_full_load.js"></script>
 <script src="modules/search.js"></script>
 <script src="modules/links.js"></script>
 <script src="modules/shortcuts.js"></script>
 
 <script src="modules/themes.js"></script>
 <script src="modules/theme_settings.js"></script>
-<script src="modules/sqlite_settings.js"></script>
 <script src="core/ui.js"></script>
 <script src="core/app.js"></script>
 </body>

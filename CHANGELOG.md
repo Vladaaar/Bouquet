@@ -4,6 +4,10 @@
 
 ### Русский
 
+- Общий модуль «Загрузка файлов» с единственной настройкой порога полной загрузки в память (по умолчанию 100 МБ). 0 всегда требует прогрессивного чтения. При ненулевом пороге форматы без прогрессивного обработчика открываются обычным способом независимо от размера.
+- Добавлено прогрессивное чтение CSV/TSV, текста и компонентов CronosPro с ограниченным блочным кэшем, пагинацией, фильтрацией и отменой. Excel остаётся с полной загрузкой через SheetJS.
+- SQLite объединён в один парсер для диапазонного и предварительно загруженного источника; отдельные настройки SQLite удалены, старый полный декодер оставлен только как тестовый эталон.
+
 - Модули настроек задают описания своих групп обычными абзацами без отдельных карточек. Читшит перенесён в последний блок настроек; ? открывает его, отдельная кнопка справки убрана.
 - Добавлен P для углового пина таблицы. Подсказки горячих клавиш больше не попадают в названия разделов и хлебные крошки.
 
@@ -16,6 +20,10 @@
 - Плагин-пример Hello исключён из всех дистрибутивов и остаётся доступен в репозитории исходников.
 
 ### English
+
+- Added a shared File loading module with one full-memory threshold setting (default 100 MB). Zero always requires progressive reading. With a positive threshold, full-only formats load normally regardless of size.
+- Added progressive CSV/TSV, text and CronosPro component reads with bounded block caching, pagination, filtering and cancellation. Excel retains full loading through SheetJS.
+- SQLite now uses one parser for cached and progressive sources; SQLite-specific loading settings are removed and the legacy full decoder remains only as a test reference.
 
 - Settings providers own plain group descriptions without separate cards. The cheat sheet is now the final Settings block, opened with ?; the dedicated help button is removed.
 - Added P for the table corner pin. Keyboard tooltip text no longer leaks into section labels or breadcrumbs.

@@ -80,3 +80,20 @@ test('grouping uses directories, keeps incomplete databases together, and never 
  const ambiguous=entries.map(entry=>({...entry,name:entry.name.split('/').at(-1)}));
  assert.equal(plugin.groupFiles(ambiguous).length,12);
 });
+
+test('large Cronos bank and index return the first page through bounded ranges', async () => {
+ const {B,plugin}=setup(), data=fixture({count:20000}), reads=new Map();
+ const files=Object.entries(data).map(([name,bytes])=>({name,open(){
+   const calls=reads.get(name)||[];reads.set(name,calls);
+   return {name,size:bytes.length,async read(offset,length,{signal}={}){
+     B.util.checkAbort(signal);calls.push([offset,length]);return bytes.subarray(offset,offset+length);
+   }};
+ }}));
+ const db=await plugin.open({name:'CroStru.dat',source:files[0].open(),files});
+ const page=await db.tables[0].read({limit:10});assert.equal(page.rows.length,10);assert.equal(page.hasMore,true);
+ for(const name of ['CroBank.dat','CroBank.tad']){
+   const calls=reads.get(name);assert.ok(calls.length);assert.ok(calls.every(([,length])=>length<=65536));
+   assert.ok(calls.reduce((sum,[,length])=>sum+length,0)<data[name].length/2);
+ }
+ db.close();
+});

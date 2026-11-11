@@ -13,8 +13,6 @@
     active: 0, query: '', page: 0, pageSize: 100, opening: false, reading: false,
     cursors: [null], total: undefined, collection: null, location: 'data'
   };
-  const progressive = $('progressive');
-  const MEMORY_LIMIT = 100 * 1024 * 1024;
   let opening, reading, debounce, selectionVersion = 0;
   let collectionId = 0, fileId = 0, changing = 0, restoring = false;
   let pageJump = 0;
@@ -59,12 +57,12 @@
       if (route.kind === 'upload') {
         selectionVersion++; cancelContent(); S.dataset?.close?.();
         Object.assign(S, { fileName: null, fileLabel: null, collection: null, directory: '', source: null, dataset: null,
-          interp: null, bytes: null, active: -1, query: '', error: '', readError: null, loadingMode: null, location: 'data', load: null });
+          interp: null, bytes: null, active: -1, query: '', error: '', readError: null, location: 'data', load: null });
         q.value = ''; clear.hidden = true; resetPages(); I.bind(summary, null); setStatus(null); paint();
       } else if (route.kind === 'directory') {
         selectionVersion++; cancelContent(); S.dataset?.close?.();
         Object.assign(S, { collection: route.collection, directory: route.directory, fileName: null, fileLabel: null,
-          source: null, dataset: null, interp: null, bytes: null, active: -1, query: '', error: '', readError: null, loadingMode: null, location: 'files' });
+          source: null, dataset: null, interp: null, bytes: null, active: -1, query: '', error: '', readError: null, location: 'files' });
         q.value = ''; clear.hidden = true; resetPages(); paint();
       } else if (S.fileKey === route.fileKey && S.dataset) {
         cancelContent(); S.location = route.kind === 'table' || !isDatabase() ? 'data' : 'tables';
@@ -111,14 +109,14 @@
     try { return B.pluginEnabled(m) && m.test(value); } catch { return false; }
   }).sort((a, b) => (b.priority || 0) - (a.priority || 0))[0];
 
-  async function openSource(load, name, { preserve = false, mode, label = preserve ? S.fileLabel : name, fileKey = preserve ? S.fileKey : 'file-' + ++fileId, overview = false, table, query } = {}) {
+  async function openSource(load, name, { preserve = false, label = preserve ? S.fileLabel : name, fileKey = preserve ? S.fileKey : 'file-' + ++fileId, overview = false, table, query } = {}) {
     const tableName = preserve ? S.dataset?.tables[S.active]?.name : null;
     opening?.abort(); reading?.abort(); clearTimeout(debounce);
     const request = opening = new AbortController();
     B.ui.currentView = null; B.emit('view:reset');
     S.dataset?.close?.();
     Object.assign(S, { fileName: name, fileLabel: label, fileKey, load, source: null, dataset: null, interp: null, bytes: null,
-      opening: true, reading: false, query: preserve ? S.query : '', active: 0, error: '', loadingMode: mode || null, readError: null, location: 'data' });
+      opening: true, reading: false, query: preserve ? S.query : '', active: 0, error: '', readError: null, location: 'data' });
     resetPages(); if (!preserve) q.value = ''; clear.hidden = !q.value;
     if (query != null) { S.query = query; q.value = query; clear.hidden = !query; }
     stage.replaceChildren(); I.bind(summary, null); pager.hidden = true;
@@ -134,24 +132,12 @@
       const files = (S.collection?.entries || []).map(entry => ({ name: entry.name, open: entry.load || (() => U.blobSource(entry.file)) }));
       if (!files.some(file => file.name === name)) files.push({ name, open: () => source });
       const meta = { source, name, files, ext: U.ext(name), bytes, signal: request.signal };
-      const preferredMode = mode || (source.size > MEMORY_LIMIT ? 'progressive' : 'memory');
-      let interpreter = choose(B.interpreters, meta);
-      if (interpreter?.format && interpreter.loadingMode) {
-        interpreter = choose(B.interpreters.filter(m => m.format === interpreter.format && m.loadingMode === preferredMode), meta) || interpreter;
-      }
-      S.interp = interpreter; S.loadingMode = interpreter.loadingMode;
+      const loader = B.features['file-loading'];
+      if (!loader) throw I.error('fileLoadingMissing');
+      const interpreter = loader.select(meta);
+      S.interp = interpreter;
       paintFileState();
-      let result;
-      if (interpreter.open) result = await interpreter.open(meta);
-      else {
-        setStatus('fullReading');
-        const full = await source.read(0, source.size, { signal: request.signal });
-        U.checkAbort(request.signal);
-        await new Promise(resolve => setTimeout(resolve, 0));
-        U.checkAbort(request.signal);
-        result = await interpreter.parse({ ...meta, bytes: full,
-          buffer: full.buffer.slice(full.byteOffset, full.byteOffset + full.byteLength) });
-      }
+      const result = await loader.open(interpreter, meta, () => setStatus('fullReading'));
       if (request.signal.aborted) { result?.close?.(); return; }
       S.dataset = U.normalize(result, name);
       if (!S.dataset.tables.length) S.dataset.tables = [U.messageTable('noTables', {}, 'empty')];
@@ -194,7 +180,7 @@
     const items = U.groupFileEntries(entries);
     const root = !nameKey && entries.length && entries.every(entry => entry.name.startsWith(name + '/')) && !items.some(entry => entry.members && entry.label === name) ? name : '';
     Object.assign(S, { collection: { id: 'collection-' + ++collectionId, name, entries, items, nameKey, root }, directory: root, fileName: null, source: null,
-      dataset: null, interp: null, bytes: null, active: -1, query: '', error, loadingMode: null, readError: null, location: 'files' });
+      dataset: null, interp: null, bytes: null, active: -1, query: '', error, readError: null, location: 'files' });
     q.value = ''; clear.hidden = true; resetPages();
     B.ui.selectTab('explorer');
     if (autoOpen && items.length === 1 && !error) return openEntry(items[0]);
@@ -307,8 +293,8 @@
       B.exec(await file.text(), file.name);
       const added = B.plugins.slice(before);
       const source = S.source;
-      if (source && added.some(plugin => plugin.kind === 'interpreter')) {
-        await openSource(() => source, S.fileName, { preserve: true, mode: S.interp?.loadingMode });
+      if (source && added.some(plugin => plugin.kind === 'interpreter' || plugin.id === 'file-loading')) {
+        await openSource(() => source, S.fileName, { preserve: true });
       } else if (S.dataset && added.some(plugin => plugin.kind === 'renderer' || plugin.id === 'search')) {
         paint();
       }
@@ -432,27 +418,12 @@
       }
     }
   }
-  progressive.onchange = () => {
-    if (progressive.disabled || !S.source) return;
-    const group = B.pluginGroup(S.interp);
-    if (B.selectedPlugins[group]) {
-      const plugin = B.groupPlugins(group).find(plugin => plugin.loadingMode === (progressive.checked ? 'progressive' : 'memory'));
-      if (plugin) return B.selectPlugin(group, plugin.id);
-    }
-    const source = S.source;
-    openSource(() => source, S.fileName, { preserve: true, mode: progressive.checked ? 'progressive' : 'memory' });
-  };
   function paintFileState() {
     if (S.interp) {
       const group = B.pluginGroup(S.interp);
       if (group && B.activeGroups[group] !== S.interp.id) { B.activeGroups[group] = S.interp.id; B.emit('plugin:active', { group, id: S.interp.id }); }
     }
     fileState.hidden = S.location !== 'data';
-    I.bind($('interpreterInfo'), S.interp ? 'interpreter' : 'noInterpreter', { name: () => I.label(S.interp) });
-    progressive.checked = S.loadingMode === 'progressive';
-    const alternatives = B.interpreters.filter(m => m.format === S.interp?.format && m.loadingMode);
-    progressive.disabled = S.opening || !alternatives.some(m => m.loadingMode === 'memory') || !alternatives.some(m => m.loadingMode === 'progressive');
-    I.bind($('loadingHint'), !S.interp?.loadingMode ? 'chooseSQLite' : 'modeHint');
     const busy = S.opening || S.reading;
     const icon = busy ? '⏳' : '💐';
     if (favicon.dataset.icon !== icon) { favicon.href = icons[icon]; favicon.dataset.icon = icon; }
@@ -564,6 +535,7 @@
   $('addPlugin').onclick = () => $('pickModule').click();
   $('backLevel').onclick = goUp;
   B.ui.actions = { openFile, openFiles, chooseFiles: () => $('pickFile').click(), refresh: paint, back: goUp,
-    firstPage: () => pageEdge(false), lastPage: () => pageEdge(true) };
+    firstPage: () => pageEdge(false), lastPage: () => pageEdge(true),
+    reloadFile() { const source = S.source; return source && openSource(() => source, S.fileName, { preserve: true }); } };
   form.hidden = !search(); paint(); B.ui.start(); scanFolder();
 })();

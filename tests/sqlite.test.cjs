@@ -6,7 +6,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const { execFileSync } = require('node:child_process');
 global.window = global;
-for (const f of ['core/bouquet.js', 'core/i18n.js', 'core/sources.js', 'modules/sqlite.js', 'modules/sqlite_full_load.js', 'modules/search.js', 'modules/csv.js']) {
+for (const f of ['core/bouquet.js', 'core/i18n.js', 'core/sources.js', 'modules/file_loading.js', 'modules/sqlite.js', 'tests/fixtures/sqlite_full_load_legacy.js', 'modules/search.js', 'modules/csv.js']) {
   vm.runInThisContext(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), { filename: f });
 }
 const sqlite = Bouquet.interpreters.find(m => m.id === 'sqlite');
@@ -146,7 +146,7 @@ test('table-level INTEGER PRIMARY KEY, negative and large rowids', async () => {
   });
 });
 
-test('full-load module agrees with lazy reader on SQLite fixtures', async () => {
+test('legacy full decoder agrees with the shared SQLite reader', async () => {
   const full = Bouquet.interpreters.find(m => m.id === 'sqlite-full');
   const bytes = fs.readFileSync(fixture);
   const memory = full.parse({ buffer: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), name: 'fixture' });
@@ -157,14 +157,14 @@ test('full-load module agrees with lazy reader on SQLite fixtures', async () => 
     }
   });
 });
-test('full-load module opens the 93 MiB database without argument overflow', { skip: !fs.existsSync(large) }, () => {
+test('legacy full decoder opens the 93 MiB database without argument overflow', { skip: !fs.existsSync(large) }, () => {
   const bytes = fs.readFileSync(large);
   const db = Bouquet.interpreters.find(m => m.id === 'sqlite-full').parse({ buffer: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), name: 'large' });
   assert.deepEqual(db.tables.map(t => t.rows.length), [205907, 205727, 3]);
   assert.deepEqual(db.tables.map(t => t.columns.length), [12, 7, 4]);
 });
 
-test('full-load regression: over 200,000 rows and parentheses in table name', () => {
+test('legacy full decoder reference: over 200,000 rows and parentheses in table name', () => {
   const file = path.join(dir, 'many-rows.db');
   execFileSync('python3', ['-c', `
 import sqlite3,sys
@@ -178,4 +178,24 @@ c.commit()
   assert.equal(db.tables[0].rows.length, 205907);
   assert.deepEqual(db.tables[0].columns, ['Системный номер', 'name']);
   assert.equal(db.tables[0].rows.at(-1)[0], 205907);
+});
+
+test('one SQLite parser reads identical rows from preloaded memory and progressive sources', async () => {
+  const loader = Bouquet.features['file-loading'], oldLimit = loader.options.memoryLimitMB;
+  const results = [];
+  try {
+    for (const limit of [100, 0]) {
+      loader.setMemoryLimitMB(limit);
+      const source = await tracked(fixture); let db;
+      try {
+        const meta = { source, name: 'fixture.db', ext: 'db' };
+        const reader = loader.select(meta); assert.equal(reader.id, 'sqlite');
+        db = await loader.open(reader, meta);
+        results.push((await db.tables[0].read({ limit: 100 })).rows);
+        if (limit === 100) { assert.equal(source.stats.bytes, source.size); assert.equal(source.stats.calls, 1); }
+        else assert.ok(source.stats.bytes < source.size / 2);
+      } finally { db?.close(); await source.close(); }
+    }
+    assert.deepEqual(results[0], results[1]);
+  } finally { loader.setMemoryLimitMB(oldLimit); }
 });

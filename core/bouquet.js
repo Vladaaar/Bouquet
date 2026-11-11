@@ -78,6 +78,7 @@
       },
       /* грубая, но рабочая проверка «это текст?» */
       isText(bytes) {
+        if (bytes[0] === 255 && bytes[1] === 254 || bytes[0] === 254 && bytes[1] === 255) return true;
         const n = Math.min(bytes.length, 1024);
         let bad = 0;
         for (let i = 0; i < n; i++) {
@@ -118,7 +119,32 @@
   /* --- встроенный интерпретатор: простой текст --- */
   CORE.register({
     kind: 'interpreter', id: 'core-text', name: 'Текст', nameKey: 'plugin.text', priority: -100, fallback: true,
+    loadingModes: ['memory', 'progressive'],
     test() { return true; },
+    async open({ source, name, bytes, signal }) {
+      const U = CORE.util;
+      const head = bytes || await source.read(0, Math.min(4096, source.size), { signal });
+      if (!U.isText(head)) return { name, tables: [U.messageTable('unknownFile', { name, bytes: source.size }, 'noInterpreterName')] };
+      const stream = await U.textSource(source, signal);
+      return { name, tables: [{ name, plain: true, columns: [CORE.i18n.t('data.line')], columnKeys: ['data.line'],
+        async read({ cursor, limit = 100, match, signal, onProgress } = {}) {
+          if (!Number.isInteger(limit) || limit < 1 || limit > 10000) throw CORE.i18n.error('размер порции должен быть от 1 до 10000');
+          const rows = []; let n = cursor?.n || 1;
+          for await (const record of stream.records(cursor?.offset ?? stream.start, null, signal)) {
+            const cells = [record.text]; U.checkAbort(signal);
+            if (!match || match(cells)) {
+              if (rows.length === limit) return { rows, hasMore: true, nextCursor: { offset: record.start, n }, scanned: n - 1 };
+              rows.push({ n, cells });
+            }
+            if (n++ % 128 === 0) {
+              onProgress?.({ scanned: n - 1, found: rows.length, rows: rows.slice() });
+              await new Promise(resolve => setTimeout(resolve, 0)); U.checkAbort(signal);
+            }
+          }
+          return { rows, hasMore: false, nextCursor: null, total: n - 1, scanned: n - 1 };
+        }
+      }], close: () => stream.close() };
+    },
     parse({ buffer, name }) {
       const bytes = new Uint8Array(buffer);
       if (!CORE.util.isText(bytes)) {
