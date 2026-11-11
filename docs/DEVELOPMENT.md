@@ -32,6 +32,10 @@ The status row contains only **Found · Rows scanned · Total rows**. Unknown to
 
 Search supports words, `"exact phrases"`, `-exclusions` and `column:value`. Enter applies immediately; clearing the field returns to the first unfiltered page. `/` focuses search; arrow keys change pages outside input fields. SQLite 🔗 buttons follow declared foreign keys in either direction.
 
+## Pinned table indices
+
+Column headers and row numbers are pinned by default: headers stay at the top during vertical scrolling, row numbers stay at the left during horizontal scrolling, and the corner stays visible along both axes. The pin button in the upper-left corner toggles both together. When unpinned, the headers, row numbers and pin scroll with the table; return to the corner to pin them again. The choice lasts for the page session, survives pagination/search/empty results and is independent of full-screen mode. Toggling preserves cells and scroll position; button tooltips and accessible names follow the interface language.
+
 ## Full-screen table
 
 Use the expand button in the upper-right corner of the table header. The table fills the browser viewport, edge to edge: the application header, search, status/notices and outer spacing disappear. Row indices, scrolling, expandable cells and pagination remain available. The control stays visible when scrolling the table in either direction. Exit with the same button or **Esc**.

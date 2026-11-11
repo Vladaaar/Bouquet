@@ -4,11 +4,15 @@
 
 ### Русский
 
+- Закреплён боковик с номерами строк; пин в левом верхнем углу одновременно закрепляет или открепляет шапку и боковик, сохраняя состояние при пагинации.
+
 - Единые сборки без разделения по языкам: начальный язык выбирается по настройкам системы/браузера (RU/EN, иначе EN). Ручное переключение сохранено.
 - HTML-артефакты переименованы в `release-html` (ZIP) и `release-html-android` (автономный HTML); десктопная матрица сокращена до четырёх заданий.
 - Плагин-пример Hello исключён из всех дистрибутивов и остаётся доступен в репозитории исходников.
 
 ### English
+
+- Row numbers now stay pinned horizontally; the upper-left pin toggles column headers and row numbers together and keeps its state across pagination.
 
 - Unified builds select the initial system/browser language (RU/EN, falling back to EN) and retain manual switching.
 - HTML artifacts are now `release-html` (ZIP) and `release-html-android` (standalone HTML); the desktop matrix now has four jobs.

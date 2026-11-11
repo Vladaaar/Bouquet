@@ -18,7 +18,7 @@ function setup() {
     focus() { this.focused = true; }
     set innerHTML(value) {
       this.html = value;
-      if (value.includes('<table')) this.parts = { '.bq-controls': new Element(), tbody: new Element() };
+      if (value.includes('<table')) this.parts = { '.bq-controls': new Element(), '.bq-corner': new Element(), tbody: new Element() };
     }
     get innerHTML() { return this.html; }
     querySelector(selector) {
@@ -88,4 +88,40 @@ test('navigation, renderer replacement and read errors restore the shell', () =>
   render().onclick(); stage.replaceChildren(); mutation();
   assert.equal(app.classList.contains('bq-fullscreen'), false);
   assert.equal(render().attrs['aria-pressed'], 'false');
+});
+test('corner pin toggles both sets of indices in place and stays independent of fullscreen', () => {
+  const { app, stage, render } = setup(), fullscreenButton = render(), wrap = stage.children[0];
+  const pin = wrap.querySelector('.bq-corner').children[0];
+  assert.equal(pin.attrs['aria-pressed'], 'true');
+  assert.equal(wrap.classList.contains('bq-unpinned'), false);
+  wrap.scrollTop = 120; wrap.scrollLeft = 80;
+  const body = wrap.querySelector('tbody');
+  pin.onclick();
+  assert.equal(pin.attrs['aria-pressed'], 'false');
+  assert.equal(pin.title, 'Pin column headers and row numbers');
+  assert.equal(wrap.classList.contains('bq-unpinned'), true);
+  assert.equal(stage.children[0], wrap);
+  assert.equal(wrap.querySelector('tbody'), body);
+  assert.equal(wrap.scrollTop, 120); assert.equal(wrap.scrollLeft, 80);
+  fullscreenButton.onclick();
+  assert.equal(app.classList.contains('bq-fullscreen'), true);
+  assert.equal(pin.attrs['aria-pressed'], 'false');
+  pin.onclick();
+  assert.equal(pin.attrs['aria-pressed'], 'true');
+  assert.equal(wrap.classList.contains('bq-unpinned'), false);
+  assert.equal(app.classList.contains('bq-fullscreen'), true);
+});
+test('pin selection survives pagination and empty results, with translated accessible names', () => {
+  const { B, stage, render } = setup();
+  render(); stage.children[0].querySelector('.bq-corner').children[0].onclick();
+  B.emit('view:reset'); render([{ n: 201, cells: ['next'] }]);
+  assert.equal(stage.children[0].querySelector('.bq-corner').children[0].attrs['aria-pressed'], 'false');
+  B.i18n.setLanguage('language-ru'); render([]);
+  const wrap = stage.children[0], pin = wrap.querySelector('.bq-corner').children[0];
+  assert.equal(wrap.classList.contains('bq-unpinned'), true);
+  assert.equal(pin.attrs['aria-label'], 'Закрепить шапку и номера строк');
+  pin.onclick();
+  assert.equal(pin.attrs['aria-label'], 'Открепить шапку и номера строк');
+  render();
+  assert.equal(stage.children[0].querySelector('.bq-corner').children[0].attrs['aria-pressed'], 'true');
 });
