@@ -87,12 +87,12 @@ test('the settings module has exactly one numeric control; valid changes reload 
   const inputs = created.filter(el => el.tagName === 'input'); assert.equal(inputs.length, 1);
   const input = inputs[0]; assert.equal(input.type, 'number'); assert.equal(input.value, '100');
   assert.equal(group.group, 'file-loading'); assert.equal(group.label.ru, 'Загрузка файлов');
-  assert.match(group.description.ru, /0 — всегда прогрессивная/);
-  assert.match(group.description.ru, /ненулевой порог не учитывается/);
+  assert.equal(group.description, undefined);
   input.value = '-1'; input.onchange(); assert.equal(loader.options.memoryLimitMB, 100); assert.equal(reloads, 0); assert.ok(input.validationMessage);
   input.value = '0'; input.onchange(); assert.equal(loader.options.memoryLimitMB, 0); assert.equal(reloads, 1); assert.equal(input.validationMessage, '');
   input.onchange(); assert.equal(reloads, 1);
-  B.i18n.setLanguage('language-ru'); assert.ok(created.some(el => el.textContent === 'Загружать файлы до '));
+  B.i18n.setLanguage('language-ru'); assert.ok(created.some(el => el.textContent === 'Файлы до '));
+  assert.ok(created.some(el => el.textContent === ' МБ загружаются в память целиком. Большие файлы загружаются постепенно, если формат это поддерживает.'));
 });
 
 test('a progressive-only format ignores a positive threshold even for a small file', async () => {

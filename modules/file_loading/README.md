@@ -1,6 +1,6 @@
 # Загрузка файлов / File loading
 
-[`file_loading.js`](../file_loading.js) выбирает способ загрузки для всех форматов. В настройках одно поле: **«Загружать файлы до __ МБ в память целиком»**. Начальное значение — **100**; граница включительная, 1 МБ здесь равен 1024² байт. **0 — всегда прогрессивная загрузка**, даже для пустого файла; формат без прогрессивного чтения при 0 не открывается. Выбор действует до перезагрузки страницы.
+[`file_loading.js`](../file_loading.js) выбирает способ загрузки для всех форматов. В настройках одно поле: **«Файлы до __ МБ загружаются в память целиком»**. Начальное значение — **100**; граница включительная, 1 МБ здесь равен 1024² байт. **0 — всегда прогрессивная загрузка**, даже для пустого файла; формат без прогрессивного чтения при 0 не открывается. Выбор действует до перезагрузки страницы.
 
 При ненулевом пороге и поддержке обоих режимов модуль один раз читает все байты небольшого файла и предоставляет обработчику диапазоны из памяти. Выше порога передаёт исходный источник для чтения необходимых диапазонов. Если формат поддерживает только один способ загрузки, **ненулевой порог не учитывается**: полный обработчик загружает файл целиком независимо от размера, прогрессивный всегда читает диапазоны. Порог проверяется отдельно и для связанных файлов, например компонентов CronosPro. Это порог размера исходного файла, а не ограничение всей памяти приложения: декодированные строки, книга Excel и другие структуры тоже занимают память.
 
@@ -46,7 +46,7 @@ CronosPro читает заголовки DAT, записи TAD и соотве�
 
 ## English
 
-File loading has one setting: **Load files up to __ MB entirely into memory**, default 100, inclusive, using 1024² bytes per MB. **Zero always requires progressive reading**, including empty files; full-only formats cannot open at zero. With a positive value, dual-mode formats cache small inputs once and read large ones through ranges. Formats supporting only one mode ignore a positive threshold and use that mode regardless of size. Excel therefore still opens in full even above a positive threshold.
+File loading has one setting: **Files up to __ MB are loaded entirely into memory**, default 100, inclusive, using 1024² bytes per MB. **Zero always requires progressive reading**, including empty files; full-only formats cannot open at zero. With a positive value, dual-mode formats cache small inputs once and read large ones through ranges. Formats supporting only one mode ignore a positive threshold and use that mode regardless of size. Excel therefore still opens in full even above a positive threshold.
 
 SQLite, CSV/TSV, text and CronosPro now support both modes with one parser per format. Text/CSV use bounded 64 KiB blocks, byte-offset cursors, UTF-8 and BOM-marked UTF-16, quoted multiline CSV fields, cancellation and filtering. Individual logical records are limited to 64 MiB. CSV delimiter detection samples up to 64 KiB; wider later records expand the columns. Trailing blank CSV records are discarded with bounded lookahead storage. Cronos reads DAT/TAD headers, index entries and record ranges, retaining compression, CRC and KOD support. Searching or navigating to the end may still scan the entire input.
 

@@ -106,7 +106,7 @@
   "links.empty": "Связанные записи не найдены",
   "links.failed": "Не удалось прочитать связи: {error}",
   "links.title": "Связи: {names}",
-  "theme.system": "Системная",
+  "theme.system": "Как в системе",
   "theme.light": "Светлая",
   "theme.dark": "Тёмная",
   "rangeFallback": "Сервер не поддерживает Range: файл скачан целиком",

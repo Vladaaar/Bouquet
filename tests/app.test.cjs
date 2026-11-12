@@ -745,7 +745,7 @@ test('group settings own localized descriptions without duplicate plugin cards, 
   assert.ok(themeDescription); assert.match(themeDescription.textContent, /Темы/);
   const loading = el('formatGroups').children.find(node => node.dataset.group === 'file-loading');
   const loadingDescription = loading.children.find(node => node.className === 'group-description');
-  assert.match(loadingDescription.textContent, /порог/);
+  assert.equal(loadingDescription, undefined);
   assert.equal(el('pluginList').children.some(card => ['theme-settings', 'file-loading'].includes(card.dataset.plugin)), false);
   let mounts = 0;
   B.register({ kind: 'plugin', category: 'settings', id: 'test-footer', targetGroup: 'test-footer', setup(ui) {
@@ -755,7 +755,7 @@ test('group settings own localized descriptions without duplicate plugin cards, 
   const section = el('settingsExtras').children.at(-1), controls = section.children[2].children[0];
   assert.equal(section.children[0].textContent, 'Справка'); assert.equal(section.children[1].textContent, 'Описание');
   B.ui.setLanguage('language-en');
-  assert.match(themeDescription.textContent, /Themes/); assert.match(loadingDescription.textContent, /threshold/);
+  assert.match(themeDescription.textContent, /Themes/);
   assert.equal(section.children[0].textContent, 'Help'); assert.equal(section.children[1].textContent, 'Description');
   assert.equal(section.children[2].children[0], controls); assert.equal(mounts, 1);
   assert.equal(el('pluginList').children.some(card => card.dataset.plugin === 'test-footer'), false);

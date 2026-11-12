@@ -48,7 +48,7 @@ This built-in feature lives in `modules/table.js`, alongside the table styles an
 
 ## File loading
 
-The [File loading module](../modules/file_loading/README.md) owns the global threshold, default 100 MB (1024² bytes per MB). The only control is **Load files up to __ MB entirely into memory**. For dual-mode formats, bytes are cached once at or below it and read progressively above it. Zero always requires progressive reading. A format supporting only one mode ignores any positive threshold: full-only formats still load completely even above it. Changing the setting preserves the current query/table and resets pagination. The byte-loading policy is shared; parsers still implement format-specific progressive access. SQLite uses one parser in both modes.
+The [File loading module](../modules/file_loading/README.md) owns the global threshold, default 100 MB (1024² bytes per MB). The only control is **Files up to __ MB are loaded entirely into memory**. For dual-mode formats, bytes are cached once at or below it and read progressively above it. Zero always requires progressive reading. A format supporting only one mode ignores any positive threshold: full-only formats still load completely even above it. Changing the setting preserves the current query/table and resets pagination. The byte-loading policy is shared; parsers still implement format-specific progressive access. SQLite uses one parser in both modes.
 
 ## Formats
 

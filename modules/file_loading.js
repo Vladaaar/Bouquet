@@ -71,14 +71,11 @@
       input.max = String(Math.floor(Number.MAX_SAFE_INTEGER / MB));
       const update = () => {
         const ru = I.locale.startsWith('ru');
-        before.textContent = ru ? 'Загружать файлы до ' : 'Load files up to ';
-        after.textContent = ru ? ' МБ в память целиком' : ' MB entirely into memory';
+        before.textContent = ru ? 'Файлы до ' : 'Files up to ';
+        after.textContent = ru ? ' МБ загружаются в память целиком. Большие файлы загружаются постепенно, если формат это поддерживает.' : ' MB are loaded entirely into memory. Larger files are loaded progressively when the format supports it.';
         input.value = String(plugin.options.memoryLimitMB); input.setCustomValidity('');
       };
-      ui.addGroupSettings({ group: 'file-loading', label: this.names, description: {
-        ru: '0 — всегда прогрессивная загрузка. При ненулевом пороге большие файлы читаются прогрессивно, если формат это поддерживает, иначе — обычная загрузка. Для форматов с единственным способом загрузки ненулевой порог не учитывается. При 0 формат без прогрессивного чтения не открывается.',
-        en: '0 always requires progressive loading. With a nonzero threshold, larger files use progressive reading when supported, otherwise normal loading. A nonzero threshold is ignored for formats with only one loading mode. At 0, formats without progressive reading cannot open.'
-      }, mount(panel) {
+      ui.addGroupSettings({ group: 'file-loading', label: this.names, mount(panel) {
         const label = doc.createElement('label'); label.className = 'file-loading-limit';
         label.appendChild(before); label.appendChild(input); label.appendChild(after); panel.appendChild(label);
       } });
