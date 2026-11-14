@@ -696,9 +696,9 @@ test('appearance follows OS only in System and leaves the current data untouched
   ui.setAppearance('system');assert.match(style.textContent,/#131519/);
   systemTheme(false);assert.match(style.textContent,/#ede7d8/);
   ui.selectPlugin('theme','theme-contrast');
-  assert.equal(ui.theme,'theme-contrast');assert.match(style.textContent,/--canvas:#f0fb29/);
+  assert.equal(ui.theme,'theme-contrast');assert.match(style.textContent,/--canvas:#fff;--surface:#fff/);
   systemTheme(true);assert.match(style.textContent,/--canvas:#171717/);
-  ui.setAppearance('light');assert.match(style.textContent,/--canvas:#f0fb29/);
+  ui.setAppearance('light');assert.match(style.textContent,/--canvas:#fff;--surface:#fff/);
   assert.equal(ui.currentView,view);assert.equal(views.length,1);
   ui.selectPlugin('theme','theme-default');assert.doesNotMatch(style.textContent,/--contrast-/);
   B.register({id:'theme-alternative',kind:'plugin',category:'theme',name:'Alternative',states:{light:':root{--iris:red}',dark:':root{--iris:blue}'}});

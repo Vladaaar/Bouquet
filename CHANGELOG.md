@@ -4,11 +4,11 @@
 
 ### Русский
 
-- Добавлена тема Contrast по мотивам Blacksmith: угольная и жёлто-лаймовая палитра, строгие рамки и моноширинные подписи, светлый и тёмный режимы. Выбор доступен в настройках тем; внешние ресурсы не загружаются.
+- Добавлена тема Contrast по мотивам Blacksmith: белая основа, угольный текст и жёлто-лаймовые акценты, строгие рамки и моноширинные подписи, светлый и тёмный режимы. Жёлтая шапка, точечный фон, контрастные пин и тумблеры, состояния наведения кнопок и сегментов; в тёмном режиме у поиска нет тени. Выбор доступен в настройках тем; внешние ресурсы не загружаются.
 
 ### English
 
-- Added the Blacksmith-inspired Contrast theme with a charcoal/lime palette, crisp borders, monospaced labels and light/dark states. Choose it in theme settings; no external resources are loaded.
+- Added the Blacksmith-inspired Contrast theme with a white base, charcoal text and lime accents, crisp borders, monospaced labels and light/dark states. Includes a yellow header, dot-grid backgrounds, contrasting pin and switches, button/segment hover states and shadow-free dark search. Choose it in theme settings; no external resources are loaded.
 
 ## [1.3.1] - 2026-11-11
 
