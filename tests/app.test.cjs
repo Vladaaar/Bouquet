@@ -48,7 +48,7 @@ function setup({ fetch = async () => ({ ok: false }), withSearch = true, withHis
   for (const f of ['core/bouquet.js', 'core/i18n.js', 'core/sources.js', 'core/files.js', 'core/navigation.js', ...(withSearch ? ['modules/search.js'] : [])]) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), context);
   const views = [];
   context.Bouquet.register({ kind: 'renderer', id: 'capture', priority: 100, test: () => true, render: (_, view) => views.push(view) });
-  for (const f of ['modules/themes.js', 'modules/theme_settings.js', 'modules/file_loading.js', 'core/ui.js', 'core/app.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), context);
+  for (const f of ['modules/themes.js', 'modules/theme_contrast.js', 'modules/theme_settings.js', 'modules/file_loading.js', 'core/ui.js', 'core/app.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), context);
   const choose = (name = 'test.lazy', size) => {
     const file = Object.assign(new Blob(['data']), { name });
     if (size != null) Object.defineProperty(file, 'size', { value: size });
@@ -423,9 +423,9 @@ test('language cards preserve data, pagination, query, scroll and renderer DOM',
   assert.match(el('dataSummary').textContent, /Найдено: 220.*Просмотрено строк: 220.*Всего строк: 220/);
   assert.equal(views.length, count);
   assert.equal(el('languageList').children.length, 2);
-  assert.equal(el('themeList').children.length, 0);
+  assert.equal(el('themeList').children.length, 2);
   assert.equal(el('pluginList').children.some(card => B.plugins.find(plugin => plugin.id === card.dataset.plugin)?.category === 'language'), false);
-  assert.equal(el('pluginList').children.some(card => card.dataset.plugin === 'theme-default'), true);
+  assert.equal(el('pluginList').children.some(card => card.dataset.plugin === 'theme-default'), false);
 });
 
 test('language changes during an asynchronous read keep the same request and localize the result', async () => {
@@ -695,12 +695,18 @@ test('appearance follows OS only in System and leaves the current data untouched
   systemTheme(false);systemTheme(true);assert.match(style.textContent,/#ede7d8/);
   ui.setAppearance('system');assert.match(style.textContent,/#131519/);
   systemTheme(false);assert.match(style.textContent,/#ede7d8/);
+  ui.selectPlugin('theme','theme-contrast');
+  assert.equal(ui.theme,'theme-contrast');assert.match(style.textContent,/--canvas:#f0fb29/);
+  systemTheme(true);assert.match(style.textContent,/--canvas:#171717/);
+  ui.setAppearance('light');assert.match(style.textContent,/--canvas:#f0fb29/);
+  assert.equal(ui.currentView,view);assert.equal(views.length,1);
+  ui.selectPlugin('theme','theme-default');assert.doesNotMatch(style.textContent,/--contrast-/);
   B.register({id:'theme-alternative',kind:'plugin',category:'theme',name:'Alternative',states:{light:':root{--iris:red}',dark:':root{--iris:blue}'}});
   ui.selectPlugin('theme','theme-alternative');assert.match(style.textContent,/red/);
   ui.setAppearance('dark');assert.match(style.textContent,/blue/);
   assert.equal(ui.currentView,view);assert.equal(views.length,1);
   assert.equal(el('themeSettings').children[0],control);
-  assert.equal(el('themeList').children.length,2);
+  assert.equal(el('themeList').children.length,3);
   assert.equal(el('themeList').children.filter(card=>card.children[2].checked).length,1);
   assert.equal(el('pluginList').children.some(card=>card.dataset.plugin==='theme-settings'),false);
 });
